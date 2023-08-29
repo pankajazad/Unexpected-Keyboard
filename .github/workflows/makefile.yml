@@ -1,0 +1,32 @@
+name: Makefile CI
+
+on:
+  push:
+    branches: [ "mybranch" ]
+  pull_request:
+    branches: [ "mybranch" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up JDK
+        uses: actions/setup-java@v2
+        with:
+          java-version: '11'
+
+      - name: Install Make
+        run: sudo apt-get -y install make
+
+      - name: Build APK
+        run: make debug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v2
+        with:
+          name: app-debug
+          path: _build/juloo.keyboard2.debug.apk
