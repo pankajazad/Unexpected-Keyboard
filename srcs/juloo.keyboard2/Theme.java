@@ -50,7 +50,7 @@ public class Theme
     lockedColor = s.getColor(R.styleable.keyboard_colorLabelLocked, 0);
     subLabelColor = s.getColor(R.styleable.keyboard_colorSubLabel, 0);
     float secondaryLightOffset = s.getFloat(R.styleable.keyboard_secondaryLightOffset, 1.f);
-    secondaryLabelColor = adjustLight(labelColor, secondaryLightOffset);
+    secondaryLabelColor = adjustLight(lockedColor, secondaryLightOffset);
     keyBorderRadius = s.getDimension(R.styleable.keyboard_keyBorderRadius, 0);
     keyBorderWidth = s.getDimension(R.styleable.keyboard_keyBorderWidth, 0);
     keyBorderWidthActivated = s.getDimension(R.styleable.keyboard_keyBorderWidthActivated, 0);
