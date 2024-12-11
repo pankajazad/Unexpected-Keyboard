@@ -1,7 +1,6 @@
 package juloo.keyboard2;
 
 import android.content.Context;
-import android.content.res.Resources;
 import android.content.res.TypedArray;
 import android.graphics.Color;
 import android.graphics.Paint;
@@ -18,6 +17,7 @@ public class Theme
   public final int labelColor;
   public final int subLabelColor;
   public final int secondaryLabelColor;
+  public final int greyedLabelColor;
 
   public final float keyBorderRadius;
   public final float keyBorderWidth;
@@ -35,6 +35,7 @@ public class Theme
   private final Paint _keySubLabelPaint;
   private final Paint _specialKeySubLabelPaint;
   private final Paint _indicationPaint;
+  private final Paint _specialIndicationPaint;
 
   public Theme(Context context, AttributeSet attrs)
   {
@@ -49,8 +50,8 @@ public class Theme
     activatedColor = s.getColor(R.styleable.keyboard_colorLabelActivated, 0);
     lockedColor = s.getColor(R.styleable.keyboard_colorLabelLocked, 0);
     subLabelColor = s.getColor(R.styleable.keyboard_colorSubLabel, 0);
-    float secondaryLightOffset = s.getFloat(R.styleable.keyboard_secondaryLightOffset, 1.f);
-    secondaryLabelColor = adjustLight(lockedColor, secondaryLightOffset);
+    secondaryLabelColor = adjustLight(labelColor,s.getFloat(R.styleable.keyboard_secondaryDimming, 0.25f));
+    greyedLabelColor = adjustLight(labelColor,s.getFloat(R.styleable.keyboard_greyedDimming, 0.5f));
     keyBorderRadius = s.getDimension(R.styleable.keyboard_keyBorderRadius, 0);
     keyBorderWidth = s.getDimension(R.styleable.keyboard_keyBorderWidth, 0);
     keyBorderWidthActivated = s.getDimension(R.styleable.keyboard_keyBorderWidthActivated, 0);
@@ -66,6 +67,7 @@ public class Theme
     _specialKeyLabelPaint = initLabelPaint(Paint.Align.CENTER, specialKeyFont);
     _specialKeySubLabelPaint = initLabelPaint(Paint.Align.LEFT, specialKeyFont);
     _indicationPaint = initLabelPaint(Paint.Align.CENTER, null);
+    _specialIndicationPaint = initLabelPaint(Paint.Align.CENTER, specialKeyFont);
   }
 
   public Paint labelPaint(boolean special_font)
@@ -81,16 +83,18 @@ public class Theme
     return p;
   }
 
-  public Paint indicationPaint()
+  public Paint indicationPaint(boolean special_font)
   {
-    return _indicationPaint;
+    return special_font ? _specialIndicationPaint : _indicationPaint;
   }
 
-  int adjustLight(int color, float offset)
+  /** Interpolate the 'value' component toward its opposite by 'alpha'. */
+  int adjustLight(int color, float alpha)
   {
     float[] hsv = new float[3];
     Color.colorToHSV(color, hsv);
-    hsv[2] += offset;
+    float v = hsv[2];
+    hsv[2] = alpha - (2 * alpha - 1) * v;
     return Color.HSVToColor(hsv);
   }
 

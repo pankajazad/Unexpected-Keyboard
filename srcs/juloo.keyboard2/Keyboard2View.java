@@ -3,6 +3,7 @@ package juloo.keyboard2;
 import android.content.Context;
 import android.content.ContextWrapper;
 import android.graphics.Canvas;
+import android.graphics.Insets;
 import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.RectF;
@@ -13,14 +14,24 @@ import android.util.DisplayMetrics;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.Window;
+import android.view.WindowInsets;
+import android.view.WindowManager;
+import android.view.WindowMetrics;
 import java.util.Arrays;
 
 public class Keyboard2View extends View
   implements View.OnTouchListener, Pointers.IPointerEventHandler
 {
   private KeyboardData _keyboard;
+
+  /** The key holding the shift key is used to set shift state from
+      autocapitalisation. */
   private KeyValue _shift_kv;
   private KeyboardData.Key _shift_key;
+
+  /** Used to add fake pointers. */
+  private KeyValue _compose_kv;
+  private KeyboardData.Key _compose_key;
 
   private Pointers _pointers;
 
@@ -51,7 +62,12 @@ public class Keyboard2View extends View
     _pointers = new Pointers(this, _config);
     refresh_navigation_bar(context);
     setOnTouchListener(this);
-    reset();
+    int layout_id = (attrs == null) ? 0 :
+      attrs.getAttributeResourceValue(null, "layout", 0);
+    if (layout_id == 0)
+      reset();
+    else
+      setKeyboard(KeyboardData.load(getResources(), layout_id));
   }
 
   private Window getParentWindow(Context context)
@@ -69,12 +85,14 @@ public class Keyboard2View extends View
       return;
     // The intermediate Window is a [Dialog].
     Window w = getParentWindow(context);
+    w.setNavigationBarColor(_theme.colorNavBar);
+    if (VERSION.SDK_INT < 26)
+      return;
     int uiFlags = getSystemUiVisibility();
     if (_theme.isLightNavBar)
       uiFlags |= View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
     else
       uiFlags &= ~View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
-    w.setNavigationBarColor(_theme.colorNavBar);
     setSystemUiVisibility(uiFlags);
   }
 
@@ -88,6 +106,9 @@ public class Keyboard2View extends View
       _shift_kv = _shift_kv.withFlags(_shift_kv.getFlags() | KeyValue.FLAG_LOCK);
       _shift_key = _keyboard.findKeyWithValue(_shift_kv);
     }
+    _compose_kv = KeyValue.getKeyByName("compose");
+    _compose_key = _keyboard.findKeyWithValue(_compose_kv);
+    KeyModifier.set_modmap(_keyboard.modmap);
     reset();
   }
 
@@ -99,43 +120,34 @@ public class Keyboard2View extends View
     invalidate();
   }
 
-  /** Called by auto-capitalisation. */
-  public void set_shift_state(boolean state, boolean lock)
+  void set_fake_ptr_latched(KeyboardData.Key key, KeyValue kv, boolean latched,
+      boolean lock)
   {
-    if (_keyboard == null || _shift_key == null)
+    if (_keyboard == null || key == null)
       return;
-    int flags = _pointers.getKeyFlags(_shift_key, _shift_kv);
-    if (state)
-    {
-      if (flags != -1 && !lock)
-        return; // Don't replace an existing pointer
-      _pointers.add_fake_pointer(_shift_kv, _shift_key, lock);
-    }
-    else
-    {
-      if ((flags & KeyValue.FLAG_FAKE_PTR) == 0)
-        return; // Don't remove locked pointers
-      _pointers.remove_fake_pointer(_shift_kv, _shift_key);
-    }
-    invalidate();
+    _pointers.set_fake_pointer_state(key, kv, latched, lock);
+  }
+
+  /** Called by auto-capitalisation. */
+  public void set_shift_state(boolean latched, boolean lock)
+  {
+    set_fake_ptr_latched(_shift_key, _shift_kv, latched, lock);
+  }
+
+  /** Called from [KeyEventHandler]. */
+  public void set_compose_pending(boolean pending)
+  {
+    set_fake_ptr_latched(_compose_key, _compose_kv, pending, false);
   }
 
   public KeyValue modifyKey(KeyValue k, Pointers.Modifiers mods)
   {
-    if (_keyboard.modmap != null)
-    {
-      if (mods.has(KeyValue.Modifier.SHIFT))
-      {
-        KeyValue km = _keyboard.modmap.shift.get(k);
-        if (km != null)
-          return km;
-      }
-    }
     return KeyModifier.modify(k, mods);
   }
 
   public void onPointerDown(KeyValue k, boolean isSwipe)
   {
+    updateFlags();
     _config.handler.key_down(k, isSwipe);
     invalidate();
     vibrate();
@@ -143,17 +155,22 @@ public class Keyboard2View extends View
 
   public void onPointerUp(KeyValue k, Pointers.Modifiers mods)
   {
+    // [key_up] must be called before [updateFlags]. The latter might disable
+    // flags.
     _config.handler.key_up(k, mods);
+    updateFlags();
     invalidate();
   }
 
   public void onPointerHold(KeyValue k, Pointers.Modifiers mods)
   {
     _config.handler.key_up(k, mods);
+    updateFlags();
   }
 
   public void onPointerFlagsChanged(boolean shouldVibrate)
   {
+    updateFlags();
     invalidate();
     if (shouldVibrate)
       vibrate();
@@ -162,6 +179,7 @@ public class Keyboard2View extends View
   private void updateFlags()
   {
     _mods = _pointers.getModifiers();
+    _config.handler.mods_changed(_mods);
   }
 
   @Override
@@ -231,7 +249,7 @@ public class Keyboard2View extends View
 
   private void vibrate()
   {
-    VibratorCompat.vibrate(this, _config.vibration_behavior);
+    VibratorCompat.vibrate(this, _config);
   }
 
   @Override
@@ -242,6 +260,17 @@ public class Keyboard2View extends View
     int height =
       (int)(_config.keyHeight * _keyboard.keysHeight
           + _config.marginTop + _config.margin_bottom);
+    // Compatibility with display cutouts and navigation on the right
+    if (VERSION.SDK_INT >= 30)
+    {
+      WindowMetrics metrics =
+        ((WindowManager)getContext().getSystemService(Context.WINDOW_SERVICE))
+        .getCurrentWindowMetrics();
+      Insets insets = metrics.getWindowInsets().getInsetsIgnoringVisibility(
+          WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars()
+          | WindowInsets.Type.displayCutout());
+      width = metrics.getBounds().width() - insets.right - insets.left;
+    }
     setMeasuredDimension(width, height);
     _keyWidth = (width - (_config.horizontal_margin * 2)) / _keyboard.keysWidth;
   }
@@ -279,23 +308,26 @@ public class Keyboard2View extends View
   @Override
   protected void onDraw(Canvas canvas)
   {
-    updateFlags();
     // Set keyboard background opacity
     getBackground().setAlpha(_config.keyboardOpacity);
     // Set keys opacity
     _theme.keyBgPaint.setAlpha(_config.keyOpacity);
     _theme.keyDownBgPaint.setAlpha(_config.keyActivatedOpacity);
     _theme.keyBorderPaint.setAlpha(_config.keyOpacity);
-    float y = _config.marginTop + _config.keyVerticalInterval / 2;
+    float key_vertical_margin = _config.key_vertical_margin * _config.keyHeight;
+    float key_horizontal_margin = _config.key_horizontal_margin * _keyWidth;
+    // Add half of the key margin on the left and on the top as it's then added
+    // on the right and on the bottom of every keys.
+    float y = _config.marginTop + key_vertical_margin / 2;
     for (KeyboardData.Row row : _keyboard.rows)
     {
       y += row.shift * _config.keyHeight;
-      float x = _config.horizontal_margin + _config.keyHorizontalInterval / 2;
-      float keyH = row.height * _config.keyHeight - _config.keyVerticalInterval;
+      float x = _config.horizontal_margin + key_horizontal_margin / 2;
+      float keyH = row.height * _config.keyHeight - key_vertical_margin;
       for (KeyboardData.Key k : row.keys)
       {
         x += k.shift * _keyWidth;
-        float keyW = _keyWidth * k.width - _config.keyHorizontalInterval;
+        float keyW = _keyWidth * k.width - key_horizontal_margin;
         boolean isKeyDown = _pointers.isKeyDown(k);
         drawKeyFrame(canvas, x, y, keyW, keyH, isKeyDown);
         if (k.keys[0] != null)
@@ -305,10 +337,7 @@ public class Keyboard2View extends View
           if (k.keys[i] != null)
             drawSubLabel(canvas, k.keys[i], x, y, keyW, keyH, i, isKeyDown);
         }
-        if (k.indication != null)
-        {
-          drawIndication(canvas, k.indication, keyW / 2f + x, y, keyH);
-        }
+        drawIndication(canvas, k, x, y, keyW, keyH);
         x += _keyWidth * k.width;
       }
       y += row.height * _config.keyHeight;
@@ -326,9 +355,13 @@ public class Keyboard2View extends View
       boolean isKeyDown)
   {
     float r = _theme.keyBorderRadius;
-    float w = isKeyDown ? _theme.keyBorderWidthActivated : _theme.keyBorderWidth;
-    float w2 = _theme.keyBorderWidth / 2.f;
-    _tmpRect.set(x + w2, y + w2, x + keyW - w2, y + keyH - w2);
+    if (_config.borderConfig)
+      r = _config.customBorderRadius * _keyWidth;
+    float w = (_config.borderConfig) ? _config.customBorderLineWidth : _theme.keyBorderWidth;
+    float padding = w / 2.f;
+    if (isKeyDown)
+      w = _theme.keyBorderWidthActivated;
+    _tmpRect.set(x + padding, y + padding, x + keyW - padding, y + keyH - padding);
     canvas.drawRoundRect(_tmpRect, r, r,
         isKeyDown ? _theme.keyDownBgPaint : _theme.keyBgPaint);
     if (w > 0.f)
@@ -336,8 +369,8 @@ public class Keyboard2View extends View
       _theme.keyBorderPaint.setStrokeWidth(w);
       float overlap = r - r * 0.85f + w; // sin(45°)
       drawBorder(canvas, x, y, x + overlap, y + keyH, _theme.keyBorderColorLeft);
-      drawBorder(canvas, x, y, x + keyW, y + overlap, _theme.keyBorderColorTop);
       drawBorder(canvas, x + keyW - overlap, y, x + keyW, y + keyH, _theme.keyBorderColorRight);
+      drawBorder(canvas, x, y, x + keyW, y + overlap, _theme.keyBorderColorTop);
       drawBorder(canvas, x, y + keyH - overlap, x + keyW, y + keyH, _theme.keyBorderColorBottom);
     }
   }
@@ -349,6 +382,8 @@ public class Keyboard2View extends View
   {
     Paint p = _theme.keyBorderPaint;
     float r = _theme.keyBorderRadius;
+    if (_config.borderConfig)
+      r = _config.customBorderRadius * _keyWidth;
     canvas.save();
     canvas.clipRect(clipl, clipt, clipr, clipb);
     p.setColor(color);
@@ -363,13 +398,17 @@ public class Keyboard2View extends View
       int flags = _pointers.getKeyFlags(k);
       if (flags != -1)
       {
-        if ((flags & KeyValue.FLAG_LOCKED) != 0)
+        if ((flags & Pointers.FLAG_P_LOCKED) != 0)
           return _theme.lockedColor;
         return _theme.activatedColor;
       }
     }
-    if (k.hasFlags(KeyValue.FLAG_SECONDARY))
+    if (k.hasFlagsAny(KeyValue.FLAG_SECONDARY | KeyValue.FLAG_GREYED))
+    {
+      if (k.hasFlagsAny(KeyValue.FLAG_GREYED))
+        return _theme.greyedLabelColor;
       return _theme.secondaryLabelColor;
+    }
     return sublabel ? _theme.subLabelColor : _theme.labelColor;
   }
 
@@ -379,7 +418,7 @@ public class Keyboard2View extends View
     if (kv == null)
       return;
     float textSize = scaleTextSize(kv, _config.labelTextSize, keyH);
-    Paint p = _theme.labelPaint(kv.hasFlags(KeyValue.FLAG_KEY_FONT));
+    Paint p = _theme.labelPaint(kv.hasFlagsAny(KeyValue.FLAG_KEY_FONT));
     p.setColor(labelColor(kv, isKeyDown, false));
     p.setAlpha(_config.labelBrightness);
     p.setTextSize(textSize);
@@ -395,7 +434,7 @@ public class Keyboard2View extends View
     if (kv == null)
       return;
     float textSize = scaleTextSize(kv, _config.sublabelTextSize, keyH);
-    Paint p = _theme.subLabelPaint(kv.hasFlags(KeyValue.FLAG_KEY_FONT), a);
+    Paint p = _theme.subLabelPaint(kv.hasFlagsAny(KeyValue.FLAG_KEY_FONT), a);
     p.setColor(labelColor(kv, isKeyDown, true));
     p.setAlpha(_config.labelBrightness);
     p.setTextSize(textSize);
@@ -416,20 +455,41 @@ public class Keyboard2View extends View
     canvas.drawText(label, 0, label_len, x, y, p);
   }
 
-  private void drawIndication(Canvas canvas, String indication, float x,
-      float y, float keyH)
+  private void drawIndication(Canvas canvas, KeyboardData.Key k, float x,
+      float y, float keyW, float keyH)
   {
-    float textSize = keyH * _config.sublabelTextSize * _config.characterSize;
-    Paint p = _theme.indicationPaint();
+    boolean special_font = false;
+    String indic;
+    int indic_length;
+    float text_size;
+    if (k.indication != null)
+    {
+      indic = k.indication;
+      indic_length = indic.length();
+      text_size = keyH * _config.sublabelTextSize * _config.characterSize;
+    }
+    else if (k.anticircle != null)
+    {
+      indic = k.anticircle.getString();
+      // 3 character limit like regular labels
+      indic_length = Math.min(indic.length(), 3);
+      special_font = k.anticircle.hasFlagsAny(KeyValue.FLAG_KEY_FONT);
+      text_size = scaleTextSize(k.anticircle, _config.sublabelTextSize, keyH);
+    }
+    else
+    {
+      return;
+    }
+    Paint p = _theme.indicationPaint(special_font);
     p.setColor(_theme.subLabelColor);
-    p.setTextSize(textSize);
-    canvas.drawText(indication, x,
-        (keyH - p.ascent() - p.descent()) * 4/5 + y, p);
+    p.setTextSize(text_size);
+    canvas.drawText(indic, 0, indic_length,
+        x + keyW / 2f, (keyH - p.ascent() - p.descent()) * 4/5 + y, p);
   }
 
   private float scaleTextSize(KeyValue k, float rel_size, float keyH)
   {
-    float smaller_font = k.hasFlags(KeyValue.FLAG_SMALLER_FONT) ? 0.75f : 1.f;
+    float smaller_font = k.hasFlagsAny(KeyValue.FLAG_SMALLER_FONT) ? 0.75f : 1.f;
     return keyH * rel_size * smaller_font * _config.characterSize;
   }
 }

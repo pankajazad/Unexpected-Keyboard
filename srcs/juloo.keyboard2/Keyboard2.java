@@ -1,5 +1,6 @@
 package juloo.keyboard2;
 
+import android.annotation.TargetApi;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -23,43 +24,50 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import juloo.keyboard2.prefs.LayoutsPreference;
 
 public class Keyboard2 extends InputMethodService
   implements SharedPreferences.OnSharedPreferenceChangeListener
 {
   private Keyboard2View _keyboardView;
   private KeyEventHandler _keyeventhandler;
-  // If not 'null', the layout to use instead of [_currentTextLayout].
+  /** If not 'null', the layout to use instead of [_config.current_layout]. */
   private KeyboardData _currentSpecialLayout;
-  /** Current layout index in [Config.layouts]. */
-  private int _currentTextLayout;
-  // Layout associated with the currently selected locale. Not 'null'.
+  /** Layout associated with the currently selected locale. Not 'null'. */
   private KeyboardData _localeTextLayout;
   private ViewGroup _emojiPane = null;
+  private ViewGroup _clipboard_pane = null;
   public int actionId; // Action performed by the Action key.
 
   private Config _config;
+
+  /** Layout currently visible before it has been modified. */
+  KeyboardData current_layout_unmodified()
+  {
+    if (_currentSpecialLayout != null)
+      return _currentSpecialLayout;
+    KeyboardData layout = null;
+    int layout_i = _config.get_current_layout();
+    if (layout_i >= _config.layouts.size())
+      layout_i = 0;
+    if (layout_i < _config.layouts.size())
+      layout = _config.layouts.get(layout_i);
+    if (layout == null)
+      layout = _localeTextLayout;
+    return layout;
+  }
 
   /** Layout currently visible. */
   KeyboardData current_layout()
   {
     if (_currentSpecialLayout != null)
       return _currentSpecialLayout;
-    KeyboardData layout = null;
-    if (_currentTextLayout >= _config.layouts.size())
-      _currentTextLayout = 0;
-    if (_currentTextLayout < _config.layouts.size())
-      layout = _config.layouts.get(_currentTextLayout);
-    if (layout == null)
-      layout = _localeTextLayout;
-    return _config.modify_layout(layout);
+    return _config.modify_layout(current_layout_unmodified());
   }
 
   void setTextLayout(int l)
   {
-    if (l == _currentTextLayout)
-      return;
-    _currentTextLayout = l;
+    _config.set_current_layout(l);
     _currentSpecialLayout = null;
     _keyboardView.setKeyboard(current_layout());
   }
@@ -67,7 +75,7 @@ public class Keyboard2 extends InputMethodService
   void incrTextLayout(int delta)
   {
     int s = _config.layouts.size();
-    setTextLayout((_currentTextLayout + delta + s) % s);
+    setTextLayout((_config.get_current_layout() + delta + s) % s);
   }
 
   void setSpecialLayout(KeyboardData l)
@@ -81,17 +89,23 @@ public class Keyboard2 extends InputMethodService
     return KeyboardData.load(getResources(), layout_id);
   }
 
-  /** Load a layout that contains a numpad (eg. the pin entry). */
+  /** Load a layout that contains a numpad. */
   KeyboardData loadNumpad(int layout_id)
   {
-    return _config.modify_numpad(KeyboardData.load(getResources(), layout_id));
+    return _config.modify_numpad(KeyboardData.load(getResources(), layout_id),
+        current_layout_unmodified());
+  }
+
+  KeyboardData loadPinentry(int layout_id)
+  {
+    return _config.modify_pinentry(KeyboardData.load(getResources(), layout_id),
+        current_layout_unmodified());
   }
 
   @Override
   public void onCreate()
   {
     super.onCreate();
-    KeyboardData.init(getResources());
     SharedPreferences prefs = DirectBootAwarePreferences.get_shared_preferences(this);
     _keyeventhandler = new KeyEventHandler(getMainLooper(), this.new Receiver());
     Config.initGlobalConfig(prefs, getResources(), _keyeventhandler);
@@ -100,6 +114,7 @@ public class Keyboard2 extends InputMethodService
     _keyboardView = (Keyboard2View)inflate_view(R.layout.keyboard);
     _keyboardView.reset();
     Logs.set_debug_logs(getResources().getBoolean(R.bool.debug_logs));
+    ClipboardHistoryService.on_startup(this, _keyeventhandler);
   }
 
   private List<InputMethodSubtype> getEnabledSubtypes(InputMethodManager imm)
@@ -111,6 +126,7 @@ public class Keyboard2 extends InputMethodService
     return Arrays.asList();
   }
 
+  @TargetApi(12)
   private ExtraKeys extra_keys_of_subtype(InputMethodSubtype subtype)
   {
     String extra_keys = subtype.getExtraValueOf("extra_keys");
@@ -120,17 +136,12 @@ public class Keyboard2 extends InputMethodService
     return ExtraKeys.EMPTY;
   }
 
-  private void refreshAccentsOption(InputMethodManager imm, InputMethodSubtype subtype)
+  private void refreshAccentsOption(InputMethodManager imm, List<InputMethodSubtype> enabled_subtypes)
   {
-    List<InputMethodSubtype> enabled_subtypes = getEnabledSubtypes(imm);
     List<ExtraKeys> extra_keys = new ArrayList<ExtraKeys>();
-    // Gather extra keys from all enabled subtypes
-    extra_keys.add(extra_keys_of_subtype(subtype));
     for (InputMethodSubtype s : enabled_subtypes)
       extra_keys.add(extra_keys_of_subtype(s));
     _config.extra_keys_subtype = ExtraKeys.merge(extra_keys);
-    if (enabled_subtypes.size() > 1)
-      _config.shouldOfferSwitchingToNextInputMethod = true;
   }
 
   InputMethodManager get_imm()
@@ -138,25 +149,36 @@ public class Keyboard2 extends InputMethodService
     return (InputMethodManager)getSystemService(INPUT_METHOD_SERVICE);
   }
 
+  @TargetApi(12)
+  private InputMethodSubtype defaultSubtypes(InputMethodManager imm, List<InputMethodSubtype> enabled_subtypes)
+  {
+    if (VERSION.SDK_INT < 24)
+      return imm.getCurrentInputMethodSubtype();
+    // Android might return a random subtype, for example, the first in the
+    // list alphabetically.
+    InputMethodSubtype current_subtype = imm.getCurrentInputMethodSubtype();
+    for (InputMethodSubtype s : enabled_subtypes)
+      if (s.getLanguageTag().equals(current_subtype.getLanguageTag()))
+        return s;
+    return null;
+  }
+
   private void refreshSubtypeImm()
   {
     InputMethodManager imm = get_imm();
-    if (VERSION.SDK_INT < 28)
-      _config.shouldOfferSwitchingToNextInputMethod = true;
-    else
-      _config.shouldOfferSwitchingToNextInputMethod = shouldOfferSwitchingToNextInputMethod();
-    _config.shouldOfferVoiceTyping = (get_voice_typing_im(imm) != null);
+    _config.shouldOfferVoiceTyping = true;
     KeyboardData default_layout = null;
     _config.extra_keys_subtype = null;
     if (VERSION.SDK_INT >= 12)
     {
-      InputMethodSubtype subtype = imm.getCurrentInputMethodSubtype();
+      List<InputMethodSubtype> enabled_subtypes = getEnabledSubtypes(imm);
+      InputMethodSubtype subtype = defaultSubtypes(imm, enabled_subtypes);
       if (subtype != null)
       {
         String s = subtype.getExtraValueOf("default_layout");
         if (s != null)
           default_layout = LayoutsPreference.layout_of_string(getResources(), s);
-        refreshAccentsOption(imm, subtype);
+        refreshAccentsOption(imm, enabled_subtypes);
       }
     }
     if (default_layout == null)
@@ -214,22 +236,10 @@ public class Keyboard2 extends InputMethodService
     {
       _keyboardView = (Keyboard2View)inflate_view(R.layout.keyboard);
       _emojiPane = null;
+      _clipboard_pane = null;
+      setInputView(_keyboardView);
     }
     _keyboardView.reset();
-  }
-
-  /** Returns the id and subtype of the voice typing IM. Returns [null] if none
-      is installed or if the feature is unsupported. */
-  SimpleEntry<String, InputMethodSubtype> get_voice_typing_im(InputMethodManager imm)
-  {
-    if (VERSION.SDK_INT < 11) // Due to InputMethodSubtype
-      return null;
-    for (InputMethodInfo im : imm.getEnabledInputMethodList())
-      for (InputMethodSubtype imst : imm.getEnabledInputMethodSubtypeList(im, true))
-        // Switch to the first IM that has a subtype of this mode
-        if (imst.getMode().equals("voice"))
-          return new SimpleEntry(im.getId(), imst);
-    return null;
   }
 
   private KeyboardData refresh_special_layout(EditorInfo info)
@@ -240,7 +250,7 @@ public class Keyboard2 extends InputMethodService
       case InputType.TYPE_CLASS_PHONE:
       case InputType.TYPE_CLASS_DATETIME:
         if (_config.pin_entry_enabled)
-          return loadNumpad(R.xml.pin);
+          return loadPinentry(R.xml.pin);
         else
           return loadNumpad(R.xml.numeric);
       default:
@@ -350,7 +360,6 @@ public class Keyboard2 extends InputMethodService
   public void onSharedPreferenceChanged(SharedPreferences _prefs, String _key)
   {
     refresh_config();
-    setInputView(_keyboardView);
     _keyboardView.setKeyboard(current_layout());
   }
 
@@ -389,19 +398,26 @@ public class Keyboard2 extends InputMethodService
           setInputView(_emojiPane);
           break;
 
+        case SWITCH_CLIPBOARD:
+          if (_clipboard_pane == null)
+            _clipboard_pane = (ViewGroup)inflate_view(R.layout.clipboard_pane);
+          setInputView(_clipboard_pane);
+          break;
+
         case SWITCH_BACK_EMOJI:
+        case SWITCH_BACK_CLIPBOARD:
           setInputView(_keyboardView);
           break;
 
-        case CHANGE_METHOD:
+        case CHANGE_METHOD_PICKER:
           get_imm().showInputMethodPicker();
           break;
 
-        case CHANGE_METHOD_PREV:
+        case CHANGE_METHOD_AUTO:
           if (VERSION.SDK_INT < 28)
             get_imm().switchToLastInputMethod(getConnectionToken());
           else
-            switchToPreviousInputMethod();
+            switchToNextInputMethod(false);
           break;
 
         case ACTION:
@@ -427,14 +443,14 @@ public class Keyboard2 extends InputMethodService
           break;
 
         case SWITCH_VOICE_TYPING:
-          SimpleEntry<String, InputMethodSubtype> im = get_voice_typing_im(get_imm());
-          if (im == null)
-            return;
-          // Best-effort. Good enough for triggering Google's voice typing.
-          if (VERSION.SDK_INT < 28)
-            switchInputMethod(im.getKey());
-          else
-            switchInputMethod(im.getKey(), im.getValue());
+          if (!VoiceImeSwitcher.switch_to_voice_ime(Keyboard2.this, get_imm(),
+                Config.globalPrefs()))
+            _config.shouldOfferVoiceTyping = false;
+          break;
+
+        case SWITCH_VOICE_TYPING_CHOOSER:
+          VoiceImeSwitcher.choose_voice_ime(Keyboard2.this, get_imm(),
+              Config.globalPrefs());
           break;
       }
     }
@@ -442,6 +458,11 @@ public class Keyboard2 extends InputMethodService
     public void set_shift_state(boolean state, boolean lock)
     {
       _keyboardView.set_shift_state(state, lock);
+    }
+
+    public void set_compose_pending(boolean pending)
+    {
+      _keyboardView.set_compose_pending(pending);
     }
 
     public InputConnection getCurrentInputConnection()

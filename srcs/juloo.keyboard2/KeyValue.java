@@ -3,7 +3,7 @@ package juloo.keyboard2;
 import android.view.KeyEvent;
 import java.util.HashMap;
 
-final class KeyValue
+public final class KeyValue implements Comparable<KeyValue>
 {
   public static enum Event
   {
@@ -12,20 +12,24 @@ final class KeyValue
     SWITCH_NUMERIC,
     SWITCH_EMOJI,
     SWITCH_BACK_EMOJI,
-    CHANGE_METHOD,
-    CHANGE_METHOD_PREV,
+    SWITCH_CLIPBOARD,
+    SWITCH_BACK_CLIPBOARD,
+    CHANGE_METHOD_PICKER,
+    CHANGE_METHOD_AUTO,
     ACTION,
     SWITCH_FORWARD,
     SWITCH_BACKWARD,
     SWITCH_GREEKMATH,
     CAPS_LOCK,
     SWITCH_VOICE_TYPING,
+    SWITCH_VOICE_TYPING_CHOOSER,
   }
 
   // Must be evaluated in the reverse order of their values.
   public static enum Modifier
   {
     SHIFT,
+    GESTURE,
     CTRL,
     ALT,
     META,
@@ -40,6 +44,7 @@ final class KeyValue
     TREMA,
     HORN,
     HOOK_ABOVE,
+    DOUBLE_GRAVE,
     SUPERSCRIPT,
     SUBSCRIPT,
     RING,
@@ -53,8 +58,8 @@ final class KeyValue
     ARROW_RIGHT,
     BREVE,
     BAR,
-    FN, // Must be placed last to be applied first
-  }
+    FN,
+  } // Last is be applied first
 
   public static enum Editing
   {
@@ -70,8 +75,6 @@ final class KeyValue
     SHARE,
     ASSIST,
     AUTOFILL,
-    CURSOR_LEFT,
-    CURSOR_RIGHT,
   }
 
   public static enum Placeholder
@@ -87,41 +90,61 @@ final class KeyValue
 
   public static enum Kind
   {
-    Char, String, Keyevent, Event, Modifier, Editing, Placeholder
+    Char, String, Keyevent, Event, Compose_pending, Hangul_initial,
+    Hangul_medial, Modifier, Editing, Placeholder,
+    Cursor_move, // Value is encoded as a 16-bit integer.
+    Complex, // [_payload] is a [KeyValue.Complex], value is [Complex.Kind].
   }
 
+  private static final int FLAGS_OFFSET = 19;
+  private static final int KIND_OFFSET = 28;
+
   // Behavior flags.
-  public static final int FLAG_LATCH = (1 << 20);
-  public static final int FLAG_LOCK = (1 << 21);
+  public static final int FLAG_LATCH = (1 << FLAGS_OFFSET << 0);
+  // Key can be locked by typing twice
+  public static final int FLAG_LOCK = (1 << FLAGS_OFFSET << 1);
   // Special keys are not repeated and don't clear latched modifiers.
-  public static final int FLAG_SPECIAL = (1 << 22);
-  // Free flag: (1 << 23);
+  public static final int FLAG_SPECIAL = (1 << FLAGS_OFFSET << 2);
+  // Whether the symbol should be greyed out. For example, keys that are not
+  // part of the pending compose sequence.
+  public static final int FLAG_GREYED = (1 << FLAGS_OFFSET << 3);
   // Rendering flags.
-  public static final int FLAG_KEY_FONT = (1 << 24); // special font file
-  public static final int FLAG_SMALLER_FONT = (1 << 25); // 25% smaller symbols
-  public static final int FLAG_SECONDARY = (1 << 26); // dimmer
+  public static final int FLAG_KEY_FONT = (1 << FLAGS_OFFSET << 4); // special font file
+  public static final int FLAG_SMALLER_FONT = (1 << FLAGS_OFFSET << 5); // 25% smaller symbols
+  public static final int FLAG_SECONDARY = (1 << FLAGS_OFFSET << 6); // dimmer
   // Used by [Pointers].
-  public static final int FLAG_LOCKED = (1 << 28);
-  public static final int FLAG_FAKE_PTR = (1 << 29);
+  // Free: (1 << FLAGS_OFFSET << 7)
+  // Free: (1 << FLAGS_OFFSET << 8)
 
   // Ranges for the different components
-  private static final int FLAGS_BITS = (0b111111111 << 20); // 9 bits wide
-  private static final int KIND_BITS = (0b111 << 29); // 3 bits wide
+  private static final int FLAGS_BITS =
+    FLAG_LATCH | FLAG_LOCK | FLAG_SPECIAL | FLAG_GREYED | FLAG_KEY_FONT |
+    FLAG_SMALLER_FONT | FLAG_SECONDARY;
+  private static final int KIND_BITS = (0b1111 << KIND_OFFSET); // 4 bits wide
   private static final int VALUE_BITS = ~(FLAGS_BITS | KIND_BITS); // 20 bits wide
+
   static
   {
     check((FLAGS_BITS & KIND_BITS) == 0); // No overlap
     check((FLAGS_BITS | KIND_BITS | VALUE_BITS) == ~0); // No holes
+    // No kind is out of range
+    check((((Kind.values().length - 1) << KIND_OFFSET) & ~KIND_BITS) == 0);
   }
 
-  private final String _symbol;
+  /**
+   * The symbol that is rendered on the keyboard as a [String].
+   * Except for keys of kind:
+   * - [String], this is also the string to output.
+   * - [Complex], this is an instance of [KeyValue.Complex].
+   */
+  private final Object _payload;
 
   /** This field encodes three things: Kind, flags and value. */
   private final int _code;
 
   public Kind getKind()
   {
-    return Kind.values()[(_code & KIND_BITS) >>> 29];
+    return Kind.values()[(_code & KIND_BITS) >>> KIND_OFFSET];
   }
 
   public int getFlags()
@@ -129,16 +152,18 @@ final class KeyValue
     return (_code & FLAGS_BITS);
   }
 
-  public boolean hasFlags(int has)
+  public boolean hasFlagsAny(int has)
   {
-    return ((_code & has) == has);
+    return ((_code & has) != 0);
   }
 
   /** The string to render on the keyboard.
       When [getKind() == Kind.String], also the string to send. */
   public String getString()
   {
-    return _symbol;
+    if (getKind() == Kind.Complex)
+      return ((Complex)_payload).getSymbol();
+    return (String)_payload;
   }
 
   /** Defined only when [getKind() == Kind.Char]. */
@@ -171,9 +196,41 @@ final class KeyValue
     return Editing.values()[(_code & VALUE_BITS)];
   }
 
+  /** Defined only when [getKind() == Kind.Placeholder]. */
   public Placeholder getPlaceholder()
   {
     return Placeholder.values()[(_code & VALUE_BITS)];
+  }
+
+  /** Defined only when [getKind() == Kind.Compose_pending]. */
+  public int getPendingCompose()
+  {
+    return (_code & VALUE_BITS);
+  }
+
+  /** Defined only when [getKind()] is [Kind.Hangul_initial] or
+      [Kind.Hangul_medial]. */
+  public int getHangulPrecomposed()
+  {
+    return (_code & VALUE_BITS);
+  }
+
+  /** Defined only when [getKind() == Kind.Cursor_move]. */
+  public short getCursorMove()
+  {
+    return (short)(_code & VALUE_BITS);
+  }
+
+  /** Defined only when [getKind() == Kind.Complex]. */
+  public Complex getComplex()
+  {
+    return (Complex)_payload;
+  }
+
+  /** Defined only when [getKind() == Kind.Complex]. */
+  public Complex.Kind getComplexKind()
+  {
+    return Complex.Kind.values()[(_code & VALUE_BITS)];
   }
 
   /* Update the char and the symbol. */
@@ -182,19 +239,14 @@ final class KeyValue
     return new KeyValue(String.valueOf(c), Kind.Char, c, getFlags());
   }
 
-  public KeyValue withSymbol(String s)
-  {
-    return new KeyValue(s, (_code & KIND_BITS), (_code & VALUE_BITS), getFlags());
-  }
-
   public KeyValue withKeyevent(int code)
   {
-    return new KeyValue(_symbol, Kind.Keyevent, code, getFlags());
+    return new KeyValue(getString(), Kind.Keyevent, code, getFlags());
   }
 
   public KeyValue withFlags(int f)
   {
-    return new KeyValue(_symbol, (_code & KIND_BITS), (_code & VALUE_BITS), f);
+    return new KeyValue(_payload, (_code & KIND_BITS), (_code & VALUE_BITS), f);
   }
 
   @Override
@@ -203,37 +255,65 @@ final class KeyValue
     return sameKey((KeyValue)obj);
   }
 
+  public int compareTo(KeyValue snd)
+  {
+    // Compare the kind and value first, then the flags.
+    int d = (_code & ~FLAGS_BITS) - (snd._code & ~FLAGS_BITS);
+    if (d != 0)
+      return d;
+    d = _code - snd._code;
+    if (d != 0)
+      return d;
+    if (getKind() == Kind.Complex)
+      return ((Complex)_payload).compareTo((Complex)snd._payload);
+    return ((String)_payload).compareTo((String)snd._payload);
+  }
+
   /** Type-safe alternative to [equals]. */
   public boolean sameKey(KeyValue snd)
   {
     if (snd == null)
       return false;
-    return _symbol.equals(snd._symbol) && _code == snd._code;
+    return _code == snd._code && _payload.equals(snd._payload);
   }
 
   @Override
   public int hashCode()
   {
-    return _symbol.hashCode() + _code;
+    return _payload.hashCode() + _code;
   }
 
-  public KeyValue(String s, int kind, int value, int flags)
+  public String toString()
   {
-    check((kind & ~KIND_BITS) == 0);
-    check((flags & ~FLAGS_BITS) == 0);
-    check((value & ~VALUE_BITS) == 0);
-    _symbol = s;
-    _code = kind | flags | value;
+    int value = _code & VALUE_BITS;
+    return "[KeyValue " + getKind().toString() + "+" + getFlags() + "+" + value + " \"" + getString() + "\"]";
   }
 
-  public KeyValue(String s, Kind k, int v, int f)
+  private KeyValue(Object p, int kind, int value, int flags)
   {
-    this(s, (k.ordinal() << 29), v, f);
+    _payload = p;
+    _code = (kind & KIND_BITS) | (flags & FLAGS_BITS) | (value & VALUE_BITS);
+  }
+
+  public KeyValue(Complex p, Complex.Kind value, int flags)
+  {
+    this((Object)p, (Kind.Complex.ordinal() << KIND_OFFSET), value.ordinal(),
+        flags);
+  }
+
+  public KeyValue(String p, Kind k, int v, int f)
+  {
+    this(p, (k.ordinal() << KIND_OFFSET), v, f);
   }
 
   private static KeyValue charKey(String symbol, char c, int flags)
   {
     return new KeyValue(symbol, Kind.Char, c, flags);
+  }
+
+  private static KeyValue charKey(int symbol, char c, int flags)
+  {
+    return charKey(String.valueOf((char)symbol), c, flags);
   }
 
   private static KeyValue modifierKey(String symbol, Modifier m, int flags)
@@ -265,12 +345,12 @@ final class KeyValue
     return eventKey(String.valueOf((char)symbol), e, flags | FLAG_KEY_FONT);
   }
 
-  private static KeyValue keyeventKey(String symbol, int code, int flags)
+  public static KeyValue keyeventKey(String symbol, int code, int flags)
   {
     return new KeyValue(symbol, Kind.Keyevent, code, flags | FLAG_SECONDARY);
   }
 
-  private static KeyValue keyeventKey(int symbol, int code, int flags)
+  public static KeyValue keyeventKey(int symbol, int code, int flags)
   {
     return keyeventKey(String.valueOf((char)symbol), code, flags | FLAG_KEY_FONT);
   }
@@ -291,6 +371,16 @@ final class KeyValue
     return editingKey(String.valueOf((char)symbol), action, FLAG_KEY_FONT);
   }
 
+  /** A key that moves the cursor [d] times to the right. If [d] is negative,
+      it moves the cursor [abs(d)] times to the left. */
+  public static KeyValue cursorMoveKey(int d)
+  {
+    int symbol = (d < 0) ? 0xE008 : 0xE006;
+    return new KeyValue(String.valueOf((char)symbol), Kind.Cursor_move,
+        ((short)d) & 0xFFFF,
+        FLAG_SPECIAL | FLAG_SECONDARY | FLAG_KEY_FONT);
+  }
+
   /** A key that do nothing but has a unique ID. */
   private static KeyValue placeholderKey(Placeholder id)
   {
@@ -300,6 +390,59 @@ final class KeyValue
   public static KeyValue makeStringKey(String str)
   {
     return makeStringKey(str, 0);
+  }
+
+  public static KeyValue makeCharKey(char c)
+  {
+    return makeCharKey(c, null, 0);
+  }
+
+  public static KeyValue makeCharKey(char c, String symbol, int flags)
+  {
+    if (symbol == null)
+      symbol = String.valueOf(c);
+    return new KeyValue(symbol, Kind.Char, c, flags);
+  }
+
+  public static KeyValue makeCharKey(int symbol, char c, int flags)
+  {
+    return makeCharKey(c, String.valueOf((char)symbol), flags | FLAG_KEY_FONT);
+  }
+
+  public static KeyValue makeComposePending(String symbol, int state, int flags)
+  {
+    return new KeyValue(symbol, Kind.Compose_pending, state,
+        flags | FLAG_LATCH);
+  }
+
+  public static KeyValue makeComposePending(int symbol, int state, int flags)
+  {
+    return makeComposePending(String.valueOf((char)symbol), state,
+        flags | FLAG_KEY_FONT);
+  }
+
+  public static KeyValue makeHangulInitial(String symbol, int initial_idx)
+  {
+    return new KeyValue(symbol, Kind.Hangul_initial, initial_idx * 588 + 44032,
+        FLAG_LATCH);
+  }
+
+  public static KeyValue makeHangulMedial(int precomposed, int medial_idx)
+  {
+    precomposed += medial_idx * 28;
+    return new KeyValue(String.valueOf((char)precomposed), Kind.Hangul_medial,
+        precomposed, FLAG_LATCH);
+  }
+
+  public static KeyValue makeHangulFinal(int precomposed, int final_idx)
+  {
+    precomposed += final_idx;
+    return KeyValue.makeCharKey((char)precomposed);
+  }
+
+  public static KeyValue makeActionKey(String symbol)
+  {
+    return eventKey(symbol, Event.ACTION, FLAG_SMALLER_FONT);
   }
 
   /** Make a key that types a string. A char key is returned for a string of
@@ -312,13 +455,43 @@ final class KeyValue
       return new KeyValue(str, Kind.String, 0, flags | FLAG_SMALLER_FONT);
   }
 
+  public static KeyValue makeStringKeyWithSymbol(String str, String symbol, int flags)
+  {
+    return new KeyValue(new Complex.StringWithSymbol(str, symbol),
+        Complex.Kind.StringWithSymbol, flags);
+  }
+
+  /** Make a modifier key for passing to [KeyModifier]. */
+  public static KeyValue makeInternalModifier(Modifier mod)
+  {
+    return new KeyValue("", Kind.Modifier, mod.ordinal(), 0);
+  }
+
+  public static KeyValue parseKeyDefinition(String str)
+  {
+    if (str.length() < 2 || str.charAt(0) != ':')
+      return makeStringKey(str);
+    try
+    {
+      return KeyValueParser.parse(str);
+    }
+    catch (KeyValueParser.ParseError _e)
+    {
+      return makeStringKey(str);
+    }
+  }
+
+  /**
+   * Return a key by its name. If the given name doesn't correspond to a key
+   * defined in this function, it is passed to [parseStringKey] as a fallback.
+   */
   public static KeyValue getKeyByName(String name)
   {
     switch (name)
     {
-      /* These symbols have special meaning when in `res/xml` and are escaped in
-         standard layouts. The backslash is not stripped when parsed from the
-         custom layout option. */
+      /* These symbols have special meaning when in `srcs/layouts` and are
+         escaped in standard layouts. The backslash is not stripped when parsed
+         from the custom layout option. */
       case "\\?": return makeStringKey("?");
       case "\\#": return makeStringKey("#");
       case "\\@": return makeStringKey("@");
@@ -347,6 +520,7 @@ final class KeyValue
       case "accent_dot_below": return diacritic(0xE060, Modifier.DOT_BELOW);
       case "accent_horn": return diacritic(0xE061, Modifier.HORN);
       case "accent_hook_above": return diacritic(0xE062, Modifier.HOOK_ABOVE);
+      case "accent_double_grave": return diacritic(0xE063, Modifier.DOUBLE_GRAVE);
       case "superscript": return modifierKey("Sup", Modifier.SUPERSCRIPT, 0);
       case "subscript": return modifierKey("Sub", Modifier.SUBSCRIPT, 0);
       case "ordinal": return modifierKey("Ord", Modifier.ORDINAL, 0);
@@ -355,20 +529,69 @@ final class KeyValue
       case "fn": return modifierKey("Fn", Modifier.FN, 0);
       case "meta": return modifierKey("Meta", Modifier.META, 0);
 
+      /* Combining diacritics */
+      /* Glyphs is the corresponding dead-key + 0x0100. */
+      case "combining_dot_above": return makeCharKey(0xE15A, '\u0307', 0);
+      case "combining_double_aigu": return makeCharKey(0xE15B, '\u030B', 0);
+      case "combining_slash": return makeCharKey(0xE15C, '\u0337', 0);
+      case "combining_arrow_right": return makeCharKey(0xE15D, '\u20D7', 0);
+      case "combining_breve": return makeCharKey(0xE15E, '\u0306', 0);
+      case "combining_bar": return makeCharKey(0xE15F, '\u0335', 0);
+      case "combining_aigu": return makeCharKey(0xE150, '\u0301', 0);
+      case "combining_caron": return makeCharKey(0xE151, '\u030C', 0);
+      case "combining_cedille": return makeCharKey(0xE152, '\u0327', 0);
+      case "combining_circonflexe": return makeCharKey(0xE153, '\u0302', 0);
+      case "combining_grave": return makeCharKey(0xE154, '\u0300', 0);
+      case "combining_macron": return makeCharKey(0xE155, '\u0304', 0);
+      case "combining_ring": return makeCharKey(0xE156, '\u030A', 0);
+      case "combining_tilde": return makeCharKey(0xE157, '\u0303', 0);
+      case "combining_trema": return makeCharKey(0xE158, '\u0308', 0);
+      case "combining_ogonek": return makeCharKey(0xE159, '\u0328', 0);
+      case "combining_dot_below": return makeCharKey(0xE160, '\u0323', 0);
+      case "combining_horn": return makeCharKey(0xE161, '\u031B', 0);
+      case "combining_hook_above": return makeCharKey(0xE162, '\u0309', 0);
+      /* Combining diacritics that do not have a corresponding dead keys start
+         at 0xE200. */
+      case "combining_vertical_tilde": return makeCharKey(0xE200, '\u033E', 0);
+      case "combining_inverted_breve": return makeCharKey(0xE201, '\u0311', 0);
+      case "combining_pokrytie": return makeCharKey(0xE202, '\u0487', 0);
+      case "combining_slavonic_psili": return makeCharKey(0xE203, '\u0486', 0);
+      case "combining_slavonic_dasia": return makeCharKey(0xE204, '\u0485', 0);
+      case "combining_payerok": return makeCharKey(0xE205, '\uA67D', 0);
+      case "combining_titlo": return makeCharKey(0xE206, '\u0483', 0);
+      case "combining_vzmet": return makeCharKey(0xE207, '\uA66F', 0);
+      case "combining_arabic_v": return makeCharKey(0xE208, '\u065A', 0);
+      case "combining_arabic_inverted_v": return makeCharKey(0xE209, '\u065B', 0);
+      case "combining_shaddah": return makeCharKey(0xE210, '\u0651', 0);
+      case "combining_sukun": return makeCharKey(0xE211, '\u0652', 0);
+      case "combining_fatha": return makeCharKey(0xE212, '\u064E', 0);
+      case "combining_dammah": return makeCharKey(0xE213, '\u064F', 0);
+      case "combining_kasra": return makeCharKey(0xE214, '\u0650', 0);
+      case "combining_hamza_above": return makeCharKey(0xE215, '\u0654', 0);
+      case "combining_hamza_below": return makeCharKey(0xE216, '\u0655', 0);
+      case "combining_alef_above": return makeCharKey(0xE217, '\u0670', 0);
+      case "combining_fathatan": return makeCharKey(0xE218, '\u064B', 0);
+      case "combining_kasratan": return makeCharKey(0xE219, '\u064D', 0);
+      case "combining_dammatan": return makeCharKey(0xE220, '\u064C', 0);
+      case "combining_alef_below": return makeCharKey(0xE221, '\u0656', 0);
+
       /* Special event keys */
       case "config": return eventKey(0xE004, Event.CONFIG, FLAG_SMALLER_FONT);
       case "switch_text": return eventKey("ABC", Event.SWITCH_TEXT, FLAG_SMALLER_FONT);
       case "switch_numeric": return eventKey("123+", Event.SWITCH_NUMERIC, FLAG_SMALLER_FONT);
       case "switch_emoji": return eventKey(0xE001, Event.SWITCH_EMOJI, FLAG_SMALLER_FONT);
       case "switch_back_emoji": return eventKey("ABC", Event.SWITCH_BACK_EMOJI, 0);
+      case "switch_clipboard": return eventKey(0xE017, Event.SWITCH_CLIPBOARD, 0);
+      case "switch_back_clipboard": return eventKey("ABC", Event.SWITCH_BACK_CLIPBOARD, 0);
       case "switch_forward": return eventKey(0xE013, Event.SWITCH_FORWARD, FLAG_SMALLER_FONT);
       case "switch_backward": return eventKey(0xE014, Event.SWITCH_BACKWARD, FLAG_SMALLER_FONT);
       case "switch_greekmath": return eventKey("πλ∇¬", Event.SWITCH_GREEKMATH, FLAG_SMALLER_FONT);
-      case "change_method": return eventKey(0xE009, Event.CHANGE_METHOD, FLAG_SMALLER_FONT);
-      case "change_method_prev": return eventKey(0xE009, Event.CHANGE_METHOD_PREV, FLAG_SMALLER_FONT);
+      case "change_method": return eventKey(0xE009, Event.CHANGE_METHOD_PICKER, FLAG_SMALLER_FONT);
+      case "change_method_prev": return eventKey(0xE009, Event.CHANGE_METHOD_AUTO, FLAG_SMALLER_FONT);
       case "action": return eventKey("Action", Event.ACTION, FLAG_SMALLER_FONT); // Will always be replaced
       case "capslock": return eventKey(0xE012, Event.CAPS_LOCK, 0);
       case "voice_typing": return eventKey(0xE015, Event.SWITCH_VOICE_TYPING, FLAG_SMALLER_FONT);
+      case "voice_typing_chooser": return eventKey(0xE015, Event.SWITCH_VOICE_TYPING_CHOOSER, FLAG_SMALLER_FONT);
 
       /* Key events */
       case "esc": return keyeventKey("Esc", KeyEvent.KEYCODE_ESCAPE, FLAG_SMALLER_FONT);
@@ -379,8 +602,8 @@ final class KeyValue
       case "left": return keyeventKey(0xE008, KeyEvent.KEYCODE_DPAD_LEFT, 0);
       case "page_up": return keyeventKey(0xE002, KeyEvent.KEYCODE_PAGE_UP, 0);
       case "page_down": return keyeventKey(0xE003, KeyEvent.KEYCODE_PAGE_DOWN, 0);
-      case "home": return keyeventKey(0xE00B, KeyEvent.KEYCODE_MOVE_HOME, 0);
-      case "end": return keyeventKey(0xE00C, KeyEvent.KEYCODE_MOVE_END, 0);
+      case "home": return keyeventKey(0xE00B, KeyEvent.KEYCODE_MOVE_HOME, FLAG_SMALLER_FONT);
+      case "end": return keyeventKey(0xE00C, KeyEvent.KEYCODE_MOVE_END, FLAG_SMALLER_FONT);
       case "backspace": return keyeventKey(0xE011, KeyEvent.KEYCODE_DEL, 0);
       case "delete": return keyeventKey(0xE010, KeyEvent.KEYCODE_FORWARD_DEL, 0);
       case "insert": return keyeventKey("Ins", KeyEvent.KEYCODE_INSERT, FLAG_SMALLER_FONT);
@@ -397,11 +620,15 @@ final class KeyValue
       case "f11": return keyeventKey("F11", KeyEvent.KEYCODE_F11, FLAG_SMALLER_FONT);
       case "f12": return keyeventKey("F12", KeyEvent.KEYCODE_F12, FLAG_SMALLER_FONT);
       case "tab": return keyeventKey(0xE00F, KeyEvent.KEYCODE_TAB, FLAG_SMALLER_FONT);
+      case "menu": return keyeventKey("Menu", KeyEvent.KEYCODE_MENU, FLAG_SMALLER_FONT);
+      case "scroll_lock": return keyeventKey("Scrl", KeyEvent.KEYCODE_SCROLL_LOCK, FLAG_SMALLER_FONT);
 
       /* Spaces */
       case "\\t": return charKey("\\t", '\t', 0); // Send the tab character
-      case "space": return charKey("\r", ' ', FLAG_KEY_FONT | FLAG_SECONDARY);
+      case "\\n": return charKey("\\n", '\n', 0); // Send the newline character
+      case "space": return charKey(0xE00D, ' ', FLAG_KEY_FONT | FLAG_SMALLER_FONT | FLAG_GREYED);
       case "nbsp": return charKey("\u237d", '\u00a0', FLAG_SMALLER_FONT);
+      case "nnbsp": return charKey("\u2423", '\u202F', FLAG_SMALLER_FONT);
 
       /* bidi */
       case "lrm": return charKey("↱", '\u200e', 0); // Send left-to-right mark
@@ -444,7 +671,8 @@ final class KeyValue
       case "meteg_placeholder": return placeholderKey(Placeholder.METEG);
       /* intending/preventing ligature - supported by many scripts*/
       case "zwj": return charKey("zwj", '\u200D', 0); // zero-width joiner (provides ligature)
-      case "zwnj": return charKey("zwnj", '\u200C', 0); // zero-width non joiner (prevents unintended ligature)
+      case "zwnj":
+      case "halfspace": return charKey("⸽", '\u200C', 0); // zero-width non joiner
 
       /* Editing keys */
       case "copy": return editingKey(0xE030, Editing.COPY);
@@ -455,19 +683,44 @@ final class KeyValue
       case "pasteAsPlainText": return editingKey(0xE035, Editing.PASTE_PLAIN);
       case "undo": return editingKey(0xE036, Editing.UNDO);
       case "redo": return editingKey(0xE037, Editing.REDO);
+      case "cursor_left": return cursorMoveKey(-1);
+      case "cursor_right": return cursorMoveKey(1);
+      // These keys are not used
       case "replaceText": return editingKey("repl", Editing.REPLACE);
       case "textAssist": return editingKey(0xE038, Editing.ASSIST);
       case "autofill": return editingKey("auto", Editing.AUTOFILL);
-      case "cursor_left": return editingKey(0xE008, Editing.CURSOR_LEFT);
-      case "cursor_right": return editingKey(0xE006, Editing.CURSOR_RIGHT);
+
+      /* The compose key */
+      case "compose": return makeComposePending(0xE016, ComposeKeyData.compose, FLAG_SECONDARY | FLAG_SMALLER_FONT | FLAG_SPECIAL);
 
       /* Placeholder keys */
       case "removed": return placeholderKey(Placeholder.REMOVED);
       case "f11_placeholder": return placeholderKey(Placeholder.F11);
       case "f12_placeholder": return placeholderKey(Placeholder.F12);
 
-      /* Fallback to a string key that types its name */
-      default: return makeStringKey(name);
+      // Korean Hangul
+      case "ㄱ": return makeHangulInitial("ㄱ", 0);
+      case "ㄲ": return makeHangulInitial("ㄲ", 1);
+      case "ㄴ": return makeHangulInitial("ㄴ", 2);
+      case "ㄷ": return makeHangulInitial("ㄷ", 3);
+      case "ㄸ": return makeHangulInitial("ㄸ", 4);
+      case "ㄹ": return makeHangulInitial("ㄹ", 5);
+      case "ㅁ": return makeHangulInitial("ㅁ", 6);
+      case "ㅂ": return makeHangulInitial("ㅂ", 7);
+      case "ㅃ": return makeHangulInitial("ㅃ", 8);
+      case "ㅅ": return makeHangulInitial("ㅅ", 9);
+      case "ㅆ": return makeHangulInitial("ㅆ", 10);
+      case "ㅇ": return makeHangulInitial("ㅇ", 11);
+      case "ㅈ": return makeHangulInitial("ㅈ", 12);
+      case "ㅉ": return makeHangulInitial("ㅉ", 13);
+      case "ㅊ": return makeHangulInitial("ㅊ", 14);
+      case "ㅋ": return makeHangulInitial("ㅋ", 15);
+      case "ㅌ": return makeHangulInitial("ㅌ", 16);
+      case "ㅍ": return makeHangulInitial("ㅍ", 17);
+      case "ㅎ": return makeHangulInitial("ㅎ", 18);
+
+      /* The key is not one of the special ones. */
+      default: return parseKeyDefinition(name);
     }
   }
 
@@ -477,4 +730,49 @@ final class KeyValue
     if (!b)
       throw new RuntimeException("Assertion failure");
   }
+
+  public static abstract class Complex
+  {
+    public abstract String getSymbol();
+
+    /** [compareTo] can assume that [snd] is an instance of the same class. */
+    public abstract int compareTo(Complex snd);
+
+    public boolean equals(Object snd)
+    {
+      if (snd instanceof Complex)
+        return compareTo((Complex)snd) == 0;
+      return false;
+    }
+
+    /** [hashCode] will be called on this class. */
+
+    /** The kind is stored in the [value] field of the key. */
+    public static enum Kind
+    {
+      StringWithSymbol,
+    }
+
+    public static final class StringWithSymbol extends Complex
+    {
+      public final String str;
+      private final String _symbol;
+
+      public StringWithSymbol(String _str, String _sym)
+      {
+        str = _str;
+        _symbol = _sym;
+      }
+
+      public String getSymbol() { return _symbol; }
+
+      public int compareTo(Complex _snd)
+      {
+        StringWithSymbol snd = (StringWithSymbol)_snd;
+        int d = str.compareTo(snd.str);
+        if (d != 0) return d;
+        return _symbol.compareTo(snd._symbol);
+      }
+    }
+  };
 }

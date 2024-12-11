@@ -3,17 +3,21 @@ package juloo.keyboard2;
 import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.content.res.Resources;
-import android.os.Build;
 import android.util.DisplayMetrics;
 import android.util.TypedValue;
 import android.view.KeyEvent;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import juloo.keyboard2.prefs.CustomExtraKeysPreference;
+import juloo.keyboard2.prefs.ExtraKeysPreference;
+import juloo.keyboard2.prefs.LayoutsPreference;
 
-final class Config
+public final class Config
 {
   private final SharedPreferences _prefs;
 
@@ -24,25 +28,35 @@ final class Config
   public final float labelTextSize;
   public final float sublabelTextSize;
 
+  public final KeyboardData.Row bottom_row;
+  public final KeyboardData.Row number_row;
+  public final KeyboardData num_pad;
+
   // From preferences
   /** [null] represent the [system] layout. */
   public List<KeyboardData> layouts;
   public boolean show_numpad = false;
   // From the 'numpad_layout' option, also apply to the numeric pane.
   public boolean inverse_numpad = false;
-  public boolean number_row;
+  public boolean add_number_row;
   public float swipe_dist_px;
   public float slide_step_px;
-  public VibratorCompat.VibrationBehavior vibration_behavior;
+  // Let the system handle vibration when false.
+  public boolean vibrate_custom;
+  // Control the vibration if [vibrate_custom] is true.
+  public long vibrate_duration;
   public long longPressTimeout;
   public long longPressInterval;
+  public boolean keyrepeat_enabled;
   public float margin_bottom;
   public float keyHeight;
   public float horizontal_margin;
-  public float keyVerticalInterval;
-  public float keyHorizontalInterval;
+  public float key_vertical_margin;
+  public float key_horizontal_margin;
   public int labelBrightness; // 0 - 255
   public int keyboardOpacity; // 0 - 255
+  public float customBorderRadius; // 0 - 1
+  public float customBorderLineWidth; // dp
   public int keyOpacity; // 0 - 255
   public int keyActivatedOpacity; // 0 - 255
   public boolean double_tap_lock_shift;
@@ -51,19 +65,25 @@ final class Config
   public boolean autocapitalisation;
   public boolean switch_input_immediate;
   public boolean pin_entry_enabled;
+  public boolean borderConfig;
+  public int circle_sensitivity;
+  public boolean clipboard_history_enabled;
 
   // Dynamically set
-  public boolean shouldOfferSwitchingToNextInputMethod;
   public boolean shouldOfferVoiceTyping;
   public String actionLabel; // Might be 'null'
   public int actionId; // Meaningful only when 'actionLabel' isn't 'null'
   public boolean swapEnterActionKey; // Swap the "enter" and "action" keys
   public ExtraKeys extra_keys_subtype;
-  public Set<KeyValue> extra_keys_param;
-  public List<KeyValue> extra_keys_custom;
+  public Map<KeyValue, KeyboardData.PreferredPos> extra_keys_param;
+  public Map<KeyValue, KeyboardData.PreferredPos> extra_keys_custom;
 
   public final IKeyEventHandler handler;
   public boolean orientation_landscape = false;
+  /** Index in 'layouts' of the currently used layout. See
+      [get_current_layout()] and [set_current_layout()]. */
+  int current_layout_portrait;
+  int current_layout_landscape;
 
   private Config(SharedPreferences prefs, Resources res, IKeyEventHandler h)
   {
@@ -73,10 +93,19 @@ final class Config
     keyPadding = res.getDimension(R.dimen.key_padding);
     labelTextSize = 0.33f;
     sublabelTextSize = 0.22f;
+    try
+    {
+      number_row = KeyboardData.load_number_row(res);
+      bottom_row = KeyboardData.load_bottom_row(res);
+      num_pad = KeyboardData.load_num_pad(res);
+    }
+    catch (Exception e)
+    {
+      throw new RuntimeException(e.getMessage()); // Not recoverable
+    }
     // from prefs
     refresh(res);
     // initialized later
-    shouldOfferSwitchingToNextInputMethod = false;
     shouldOfferVoiceTyping = false;
     actionLabel = null;
     actionId = 0;
@@ -95,8 +124,6 @@ final class Config
     // The height of the keyboard is relative to the height of the screen.
     // This is the height of the keyboard if it have 4 rows.
     int keyboardHeightPercent;
-    // Scale some dimensions depending on orientation
-    float horizontalIntervalScale = 1.f;
     float characterSizeScale = 1.f;
     String show_numpad_s = _prefs.getString("show_numpad", "never");
     show_numpad = "always".equals(show_numpad_s);
@@ -105,7 +132,6 @@ final class Config
       if ("landscape".equals(show_numpad_s))
         show_numpad = true;
       keyboardHeightPercent = _prefs.getInt("keyboard_height_landscape", 50);
-      horizontalIntervalScale = 2.f;
       characterSizeScale = 1.25f;
     }
     else
@@ -114,7 +140,7 @@ final class Config
     }
     layouts = LayoutsPreference.load_from_preferences(res, _prefs);
     inverse_numpad = _prefs.getString("numpad_layout", "default").equals("low_first");
-    number_row = _prefs.getBoolean("number_row", false);
+    add_number_row = _prefs.getBoolean("number_row", false);
     // The baseline for the swipe distance correspond to approximately the
     // width of a key in portrait mode, as most layouts have 10 columns.
     // Multipled by the DPI ratio because most swipes are made in the diagonals.
@@ -123,28 +149,33 @@ final class Config
     float swipe_scaling = Math.min(dm.widthPixels, dm.heightPixels) / 10.f * dpi_ratio;
     float swipe_dist_value = Float.valueOf(_prefs.getString("swipe_dist", "15"));
     swipe_dist_px = swipe_dist_value / 25.f * swipe_scaling;
-    slide_step_px = swipe_dist_px / 4.f;
-    vibration_behavior =
-      VibratorCompat.VibrationBehavior.of_string(_prefs.getString("vibration_behavior", "system"));
+    slide_step_px = 0.2f * swipe_scaling;
+    vibrate_custom = _prefs.getBoolean("vibrate_custom", false);
+    vibrate_duration = _prefs.getInt("vibrate_duration", 20);
     longPressTimeout = _prefs.getInt("longpress_timeout", 600);
     longPressInterval = _prefs.getInt("longpress_interval", 65);
+    keyrepeat_enabled = _prefs.getBoolean("keyrepeat_enabled", true);
     margin_bottom = get_dip_pref_oriented(dm, "margin_bottom", 7, 3);
-    keyVerticalInterval = get_dip_pref(dm, "key_vertical_space", 2);
-    keyHorizontalInterval = get_dip_pref(dm, "key_horizontal_space", 2) * horizontalIntervalScale;
+    key_vertical_margin = get_dip_pref(dm, "key_vertical_margin", 1.5f) / 100;
+    key_horizontal_margin = get_dip_pref(dm, "key_horizontal_margin", 2) / 100;
     // Label brightness is used as the alpha channel
     labelBrightness = _prefs.getInt("label_brightness", 100) * 255 / 100;
     // Keyboard opacity
     keyboardOpacity = _prefs.getInt("keyboard_opacity", 100) * 255 / 100;
     keyOpacity = _prefs.getInt("key_opacity", 100) * 255 / 100;
     keyActivatedOpacity = _prefs.getInt("key_activated_opacity", 100) * 255 / 100;
-    // Do not substract keyVerticalInterval from keyHeight because this is done
-    // during rendered.
+    // keyboard border settings
+    borderConfig = _prefs.getBoolean("border_config", false);
+    customBorderRadius = _prefs.getInt("custom_border_radius", 0) / 100.f;
+    customBorderLineWidth = get_dip_pref(dm, "custom_border_line_width", 0);
+    // Do not substract key_vertical_margin from keyHeight because this is done
+    // during rendering.
     keyHeight = dm.heightPixels * keyboardHeightPercent / 100 / 4;
     horizontal_margin =
       get_dip_pref_oriented(dm, "horizontal_margin", 3, 28);
     double_tap_lock_shift = _prefs.getBoolean("lock_double_tap", false);
     characterSize =
-      _prefs.getFloat("character_size", 1.f)
+      _prefs.getFloat("character_size", 1.15f)
       * characterSizeScale;
     theme = getThemeId(res, _prefs.getString("theme", ""));
     autocapitalisation = _prefs.getBoolean("autocapitalisation", true);
@@ -152,13 +183,40 @@ final class Config
     extra_keys_param = ExtraKeysPreference.get_extra_keys(_prefs);
     extra_keys_custom = CustomExtraKeysPreference.get(_prefs);
     pin_entry_enabled = _prefs.getBoolean("pin_entry_enabled", true);
+    current_layout_portrait = _prefs.getInt("current_layout_portrait", 0);
+    current_layout_landscape = _prefs.getInt("current_layout_landscape", 0);
+    circle_sensitivity = Integer.valueOf(_prefs.getString("circle_sensitivity", "2"));
+    clipboard_history_enabled = _prefs.getBoolean("clipboard_history_enabled", false);
+  }
+
+  public int get_current_layout()
+  {
+    return (orientation_landscape)
+      ? current_layout_landscape : current_layout_portrait;
+  }
+
+  public void set_current_layout(int l)
+  {
+    if (orientation_landscape)
+      current_layout_landscape = l;
+    else
+      current_layout_portrait = l;
+    SharedPreferences.Editor e = _prefs.edit();
+    e.putInt("current_layout_portrait", current_layout_portrait);
+    e.putInt("current_layout_landscape", current_layout_landscape);
+    e.apply();
+  }
+
+  public void set_clipboard_history_enabled(boolean e)
+  {
+    clipboard_history_enabled = e;
+    _prefs.edit().putBoolean("clipboard_history_enabled", e).commit();
   }
 
   KeyValue action_key()
   {
     // Update the name to avoid caching in KeyModifier
-    return (actionLabel == null) ? null :
-      KeyValue.getKeyByName("action").withSymbol(actionLabel);
+    return (actionLabel == null) ? null : KeyValue.makeActionKey(actionLabel);
   }
 
   /** Update the layout according to the configuration.
@@ -174,26 +232,33 @@ final class Config
     final KeyValue action_key = action_key();
     // Extra keys are removed from the set as they are encountered during the
     // first iteration then automatically added.
-    final Set<KeyValue> extra_keys = new HashSet<KeyValue>();
+    final Map<KeyValue, KeyboardData.PreferredPos> extra_keys = new HashMap<KeyValue, KeyboardData.PreferredPos>();
     final Set<KeyValue> remove_keys = new HashSet<KeyValue>();
-    extra_keys.addAll(extra_keys_param);
-    extra_keys.addAll(extra_keys_custom);
-    if (extra_keys_subtype != null)
+    // Make sure the config key is accessible to avoid being locked in a custom
+    // layout.
+    extra_keys.put(KeyValue.getKeyByName("config"), KeyboardData.PreferredPos.ANYWHERE);
+    extra_keys.putAll(extra_keys_param);
+    extra_keys.putAll(extra_keys_custom);
+    if (extra_keys_subtype != null && kw.locale_extra_keys)
     {
       Set<KeyValue> present = new HashSet<KeyValue>();
-      kw.getKeys(present);
-      present.addAll(extra_keys_param);
-      present.addAll(extra_keys_custom);
+      present.addAll(kw.getKeys().keySet());
+      present.addAll(extra_keys_param.keySet());
+      present.addAll(extra_keys_custom.keySet());
       extra_keys_subtype.compute(extra_keys,
           new ExtraKeys.Query(kw.script, present));
     }
-    boolean number_row = this.number_row && !show_numpad;
-    if (number_row)
-      KeyboardData.number_row.getKeys(remove_keys);
+    KeyboardData.Row added_number_row = null;
+    if (add_number_row && !show_numpad)
+      added_number_row = modify_number_row(number_row, kw);
+    if (added_number_row != null)
+      remove_keys.addAll(added_number_row.getKeys(0).keySet());
+    if (kw.bottom_row)
+      kw = kw.insert_row(bottom_row, kw.rows.size());
     kw = kw.mapKeys(new KeyboardData.MapKeyValues() {
       public KeyValue apply(KeyValue key, boolean localized)
       {
-        boolean is_extra_key = extra_keys.contains(key);
+        boolean is_extra_key = extra_keys.containsKey(key);
         if (is_extra_key)
           extra_keys.remove(key);
         if (localized && !is_extra_key)
@@ -205,9 +270,7 @@ final class Config
           case Event:
             switch (key.getEvent())
             {
-              case CHANGE_METHOD:
-                if (!shouldOfferSwitchingToNextInputMethod)
-                  return null;
+              case CHANGE_METHOD_PICKER:
                 if (switch_input_immediate)
                   return KeyValue.getKeyByName("change_method_prev");
                 return key;
@@ -219,6 +282,7 @@ final class Config
               case SWITCH_BACKWARD:
                 return (layouts.size() > 2) ? key : null;
               case SWITCH_VOICE_TYPING:
+              case SWITCH_VOICE_TYPING_CHOOSER:
                 return shouldOfferVoiceTyping ? key : null;
             }
             break;
@@ -242,20 +306,20 @@ final class Config
       }
     });
     if (show_numpad)
-      kw = kw.addNumPad();
-    if (number_row)
-      kw = kw.addNumberRow();
+      kw = kw.addNumPad(modify_numpad(num_pad, kw));
     if (extra_keys.size() > 0)
-      kw = kw.addExtraKeys(extra_keys.iterator());
+      kw = kw.addExtraKeys(extra_keys.entrySet().iterator());
+    if (added_number_row != null)
+      kw = kw.insert_row(added_number_row, 0);
     return kw;
   }
 
-  /**
-   * Handle the numpad layout.
-   */
-  public KeyboardData modify_numpad(KeyboardData kw)
+  /** Handle the numpad layout. The [main_kw] is used to adapt the numpad to
+      the main layout's script. */
+  public KeyboardData modify_numpad(KeyboardData kw, KeyboardData main_kw)
   {
     final KeyValue action_key = action_key();
+    final KeyModifier.Map_char map_digit = KeyModifier.modify_numpad_script(main_kw.numpad_script);
     return kw.mapKeys(new KeyboardData.MapKeyValues() {
       public KeyValue apply(KeyValue key, boolean localized)
       {
@@ -277,16 +341,53 @@ final class Config
             }
             break;
           case Char:
-            char a = key.getChar(), b = a;
+            char prev_c = key.getChar();
+            char c = prev_c;
             if (inverse_numpad)
-              b = inverse_numpad_char(a);
-            if (a != b)
-              return key.withChar(b);
+              c = inverse_numpad_char(c);
+            String modified = map_digit.apply(c);
+            if (modified != null) // Was modified by script
+              return KeyValue.makeStringKey(modified);
+            if (prev_c != c) // Was inverted
+              return key.withChar(c);
             break;
         }
         return key;
       }
     });
+  }
+
+  static KeyboardData.MapKeyValues numpad_script_map(String numpad_script)
+  {
+    final KeyModifier.Map_char map_digit = KeyModifier.modify_numpad_script(numpad_script);
+    return new KeyboardData.MapKeyValues() {
+      public KeyValue apply(KeyValue key, boolean localized)
+      {
+        switch (key.getKind())
+        {
+          case Char:
+            String modified = map_digit.apply(key.getChar());
+            if (modified != null)
+              return KeyValue.makeStringKey(modified);
+            break;
+        }
+        return key;
+      }
+    };
+  }
+
+  /** Modify the pin entry layout. [main_kw] is used to map the digits into the
+      same script. */
+  public KeyboardData modify_pinentry(KeyboardData kw, KeyboardData main_kw)
+  {
+    return kw.mapKeys(numpad_script_map(main_kw.numpad_script));
+  }
+
+  /** Modify the number row according to [main_kw]'s script. */
+  public KeyboardData.Row modify_number_row(KeyboardData.Row row,
+      KeyboardData main_kw)
+  {
+    return row.mapKeys(numpad_script_map(main_kw.numpad_script));
   }
 
   private float get_dip_pref(DisplayMetrics dm, String pref_name, float def)
@@ -309,6 +410,7 @@ final class Config
 
   private int getThemeId(Resources res, String theme_name)
   {
+    int night_mode = res.getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
     switch (theme_name)
     {
       case "light": return R.style.Light;
@@ -317,14 +419,19 @@ final class Config
       case "dark": return R.style.Dark;
       case "white": return R.style.White;
       case "epaper": return R.style.ePaper;
+      case "desert": return R.style.Desert;
+      case "jungle": return R.style.Jungle;
+      case "monetlight": return R.style.MonetLight;
+      case "monetdark": return R.style.MonetDark;
+      case "monet":
+        if ((night_mode & Configuration.UI_MODE_NIGHT_NO) != 0)
+          return R.style.MonetLight;
+        return R.style.MonetDark;
+      case "rosepine": return R.style.RosePine;
       default:
       case "system":
-        if (Build.VERSION.SDK_INT >= 8)
-        {
-          int night_mode = res.getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
-          if ((night_mode & Configuration.UI_MODE_NIGHT_NO) != 0)
-            return R.style.Light;
-        }
+        if ((night_mode & Configuration.UI_MODE_NIGHT_NO) != 0)
+          return R.style.Light;
         return R.style.Dark;
     }
   }
@@ -357,10 +464,16 @@ final class Config
     return _globalConfig;
   }
 
+  public static SharedPreferences globalPrefs()
+  {
+    return _globalConfig._prefs;
+  }
+
   public static interface IKeyEventHandler
   {
     public void key_down(KeyValue value, boolean is_swipe);
-    public void key_up(KeyValue value, Pointers.Modifiers flags);
+    public void key_up(KeyValue value, Pointers.Modifiers mods);
+    public void mods_changed(Pointers.Modifiers mods);
   }
 
   /** Config migrations. */
@@ -389,12 +502,12 @@ final class Config
           l.add(migrate_layout(snd_layout));
         String custom_layout = prefs.getString("custom_layout", "");
         if (custom_layout != null && !custom_layout.equals(""))
-          l.add(new LayoutsPreference.CustomLayout(custom_layout));
+          l.add(LayoutsPreference.CustomLayout.parse(custom_layout));
         LayoutsPreference.save_to_preferences(e, l);
       case 1:
       default: break;
     }
-    e.commit();
+    e.apply();
   }
 
   private static LayoutsPreference.Layout migrate_layout(String name)

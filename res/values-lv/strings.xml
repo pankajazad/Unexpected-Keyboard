@@ -1,7 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-  <string name="app_name" product="debug">Unexpected Keyboard (atkļūdošana)</string>
-  <string name="app_name" product="default">Unexpected Keyboard</string>
+  <string name="app_name_release">Unexpected Keyboard</string>
+  <string name="app_name_debug">Unexpected Keyboard (atkļūdošana)</string>
+  <string name="short_description">Mazizmēra un privātumu ievērojoša virtuālā Android tastatūra.</string>
+  <string name="store_description">"Galvenā iezīme ir iespēja ievadīt vairāk rakstzīmju ar pavilkšanu uz taustiņu stūriem.
+
+Šī lietotne sākotnēji tika izstrādāta programmētājiem, kas izmanto Termux.
+Tagad lieliski piemērota izmantošanai ikdienā.
+
+Šī lietotne nesatur reklāmas, neveic nekādus tīkla pieprasījumus, un tās pirmkods ir pieejams visiem."</string>
   <string name="settings_activity_label">Unexpected Keyboard iestatījumi</string>
   <string name="pref_portrait">Stateniski</string>
   <string name="pref_landscape">Guleniski</string>
@@ -14,7 +21,7 @@
   <string name="pref_layout_e_custom">Pielāgots izkārtojums</string>
   <string name="pref_layouts_add">Pievienot aizstājējizkārtojumu</string>
   <string name="pref_layouts_item">Izkārtojums %1$d: %2$s</string>
-  <!-- <string name="pref_layouts_remove_custom">Remove layout</string> -->
+  <string name="pref_layouts_remove_custom">Noņemt izkārtojumu</string>
   <string name="pref_custom_layout_title">Pielāgots izkārtojums</string>
   <string name="pref_show_numpad_title">Rādīt ciparnīcu</string>
   <string name="pref_show_numpad_never">Nekad</string>
@@ -28,13 +35,12 @@
   <string name="pref_extra_keys_title">Pievienot tastatūrai taustiņus</string>
   <string name="pref_extra_keys_custom">Pievienot pielāgotus taustiņus</string>
   <string name="pref_extra_keys_internal">Atlasīt taustiņus, ko pievienot tastatūrai</string>
-  <string name="pref_second_layout_title">Otrējais izkārtojums</string>
-  <string name="pref_second_layout_none">Neviens</string>
   <string name="pref_category_typing">Rakstīšana</string>
   <string name="pref_swipe_dist_title">Pavilkšanas attālums</string>
   <string name="pref_swipe_dist_summary">Taustiņu stūros esošo rakstzīmju attālums (%s)</string>
-  <string name="pref_long_timeout_title">Taustiņa atkārtošanās ātrums</string>
+  <string name="pref_long_timeout_title">Ilgas piepiešanas noildze</string>
   <string name="pref_long_interval_title">Taustiņa atkārtošanās aizture</string>
+  <string name="pref_keyrepeat_enabled">Taustiņa atkārtošanās ar ilgu piespiešanu</string>
   <string name="pref_lock_double_tap_title">Divkāršs piesitiens burtslēgam</string>
   <string name="pref_lock_double_tap_summary">Tā vietā, lai ilstoši piespiestu pārveidotāju</string>
   <string name="pref_category_behavior">Uzvedība</string>
@@ -42,8 +48,8 @@
   <string name="pref_autocapitalisation_summary">Piespiest Shift teikuma sākumā</string>
   <string name="pref_switch_input_immediate_title">Pārslēgties uz pēdējo izmantoto tastatūru</string>
   <string name="pref_switch_input_immediate_summary">Tastatūras pārslēgšanas taustiņa uzvedība</string>
-  <string name="pref_vibrate_title">Trīcēšana</string>
-  <string name="pref_vibrate_summary">Iespējot/atspējot taustiņa piespiešanas trīcēšanu</string>
+  <string name="pref_vibrate_custom">Pielāgota trīcēšana</string>
+  <string name="pref_vibrate_duration_title">Trīcēšanas stiprums</string>
   <string name="pref_pin_entry_enabled_title">Piespraust ievadīšanas izkārtojumu</string>
   <string name="pref_pin_entry_enabled_summary">Kad ievada skaitļus, datumus un tālruņa numurus</string>
   <string name="pref_category_style">Izskata pielāgojumi</string>
@@ -60,6 +66,12 @@
   <string name="pref_theme_e_altblack">Citādi melns</string>
   <string name="pref_theme_e_white">Balts</string>
   <string name="pref_theme_e_epaper">ePapīrs</string>
+  <string name="pref_theme_e_desert">Tuksnesis</string>
+  <string name="pref_theme_e_jungle">Džungļi</string>
+  <string name="pref_theme_e_monet">Monē (sistēmas)</string>
+  <string name="pref_theme_e_monetlight">Monē (gaišs)</string>
+  <string name="pref_theme_e_monetdark">Monē (tumšs)</string>
+  <!-- <string name="pref_theme_e_rosepine">Rosé Pine</string> -->
   <string name="pref_swipe_dist_e_very_short">Ļoti tuvs</string>
   <string name="pref_swipe_dist_e_short">Tuvs</string>
   <string name="pref_swipe_dist_e_default">Vidējs</string>
@@ -67,11 +79,14 @@
   <string name="pref_swipe_dist_e_very_far">Ļoti tāls</string>
   <string name="pref_key_horizontal_space">Līmeniskais attālums starp taustiņiem</string>
   <string name="pref_key_vertical_space">Stateniskais attālums starp taustiņiem</string>
-  <string name="pref_vibration_e_disabled">Atspējota</string>
-  <string name="pref_vibration_e_system">Sistēmas</string>
-  <string name="pref_vibration_e_strong">Spēcīga</string>
-  <string name="pref_vibration_e_medium">Vidēja</string>
-  <string name="pref_vibration_e_light">Vāja</string>
+  <string name="pref_border_config_title">Pielāgot apmales</string>
+  <string name="pref_border_width_title">Apmales platums</string>
+  <string name="pref_corners_radius_title">Stūru rādiuss</string>
+  <string name="pref_circle_sensitivity_title">Apļveida kustības jutīgums</string>
+  <string name="pref_circle_sensitivity_e_high">Augsts</string>
+  <string name="pref_circle_sensitivity_e_medium">Vidējs</string>
+  <string name="pref_circle_sensitivity_e_low">Zems</string>
+  <string name="pref_circle_sensitivity_e_disabled">Atspējots</string>
   <string name="key_action_next">Nākamais</string>
   <string name="key_action_done">Darīts</string>
   <string name="key_action_go">Aiziet</string>
@@ -79,13 +94,17 @@
   <string name="key_action_search">Meklēt</string>
   <string name="key_action_send">Sūtīt</string>
   <string name="launcher_button_imesettings">Iespējot tastatūru</string>
+  <string name="launcher_button_imepicker">Izvēlēties tastatūru</string>
   <string name="launcher_description">Šī lietotne ir virtuālā tastatūra.
-  Ar zemāk esošo pogu var atvērt sistēmas iestatījumus un iespējot Unexpected Keyboard.</string>
+    Ar zemāk esošo pogu var atvērt sistēmas iestatījumus un iespējot Unexpected Keyboard.</string>
   <string name="launcher_sourcecode">Šī ir bezmaksas un atvērtā pirmkoda lietotne.
-  GitHub var atrast pirmkodu un ziņot par nepilnībām.</string>
+    GitHub var atrast pirmkodu un ziņot par nepilnībām.</string>
   <string name="launcher_tryhere">Pēc iespējošanas šeit var izmēģināt tastatūru:</string>
+  <string name="launcher_tryhere_hint">Izmēģināt šeit</string>
   <string name="key_descr_capslock">Burtslēgs</string>
+  <string name="key_descr_compose">Izveidot</string>
   <string name="key_descr_switch_greekmath">Grieķu un matemātikas rakstzīmes</string>
+  <string name="key_descr_change_method">Pārslēgt tastatūru</string>
   <string name="key_descr_voice_typing">Rakstīšana ar balsi</string>
   <string name="key_descr_copy">Ievietot starpliktuvē</string>
   <string name="key_descr_paste">Ielīmēt</string>
@@ -95,12 +114,18 @@
   <string name="key_descr_pasteAsPlainText">Ielīmēt kā vienkāršu tekstu</string>
   <string name="key_descr_undo">Atsaukt</string>
   <string name="key_descr_redo">Atatsaukt</string>
-  <string name="key_descr_replaceText">Aizvietot</string>
-  <string name="key_descr_textAssist">Palīgs</string>
-  <string name="key_descr_autofill">Automātiskā aizpilde</string>
   <string name="key_descr_ª">Kārtas rādītājs</string>
   <string name="key_descr_º">Kārtas rādītājs</string>
   <string name="key_descr_superscript">Augšraksts</string>
   <string name="key_descr_subscript">Apakšraksts</string>
-  <string name="pref_category_advanced">Papildu</string>
+  <string name="key_descr_page_up">Augšupšķirt</string>
+  <string name="key_descr_page_down">Lejupšķirt</string>
+  <string name="key_descr_home">Sākums</string>
+  <string name="key_descr_end">Beigas</string>
+  <string name="key_descr_clipboard">Starpliktuves pārvaldnieks</string>
+  <!-- <string name="key_descr_combining">Combining diacritic</string> -->
+  <string name="clipboard_history_heading">Nesen starpliktuvē ievietots teksts</string>
+  <string name="clipboard_pin_heading">Piesprausts</string>
+  <string name="clipboard_remove_confirm">Noņemt šo starpliktuves vienumu?</string>
+  <string name="clipboard_remove_confirmed">Jā</string>
 </resources>

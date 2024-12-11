@@ -1,7 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-  <string name="app_name" product="debug">Tastatură Unexpected (depanare)</string>
-  <string name="app_name" product="default">Tastatură Unexpected</string>
+  <string name="app_name_release">Unexpected Keyboard</string>
+  <string name="app_name_debug">Tastatură Unexpected (depanare)</string>
+  <string name="short_description">Tastatură virtuală pentru Android, ușoară și respectuoasă cu viața privată.</string>
+  <string name="store_description">"Funcționalitatea principală este accesul rapid la o mulțime de caractere ASCII prin glisarea către colțurile tastelor.
+
+Această aplicație a fost concepută inițial pentru programatori care folosec Termux.
+Este perfectă pentru uzul cotidian.
+
+Această aplicație nu conține publicitate, nu folosește rețeaua deloc și e Open Source."</string>
   <string name="settings_activity_label">Setări Tastatură Unexpected</string>
   <string name="pref_portrait">În mod portret</string>
   <string name="pref_landscape">În mod panoramă</string>
@@ -28,13 +35,12 @@
   <string name="pref_extra_keys_title">Adaugă taste pe tastatură</string>
   <!-- <string name="pref_extra_keys_custom">Add custom keys</string> -->
   <!-- <string name="pref_extra_keys_internal">Select keys to add to the keyboard</string> -->
-  <string name="pref_second_layout_title">Aranjament secundar</string>
-  <string name="pref_second_layout_none">Nimic</string>
   <string name="pref_category_typing">Tipărire</string>
   <string name="pref_swipe_dist_title">Distanța de glisare</string>
   <string name="pref_swipe_dist_summary">Distanța dintre caracterele din colțurile tastelor (%s)</string>
-  <string name="pref_long_timeout_title">Timeout pentru repetarea tastelor</string>
+  <!-- <string name="pref_long_timeout_title">Long press timeout</string> -->
   <string name="pref_long_interval_title">Intervalul de repetare a tastelor</string>
+  <!-- <string name="pref_keyrepeat_enabled">Key repeat on long press</string> -->
   <string name="pref_lock_double_tap_title">Apăsare dublă pe Shift activează Caps Lock</string>
   <string name="pref_lock_double_tap_summary">Puteți activa orice modificator, ținându-l apăsat</string>
   <string name="pref_category_behavior">Comportament</string>
@@ -42,8 +48,8 @@
   <string name="pref_autocapitalisation_summary">Autoapăsare Shift la începutul fiecărei propoziții</string>
   <string name="pref_switch_input_immediate_title">Schimbă la ultima tastatură folosită</string>
   <string name="pref_switch_input_immediate_summary">Comportamentul tastei pentru schimbarea tastaturii</string>
-  <string name="pref_vibrate_title">Vibrație</string>
-  <string name="pref_vibrate_summary">Activați/dezactivați vibrația la apăsarea tastelor</string>
+  <!-- <string name="pref_vibrate_custom">Custom vibration</string> -->
+  <!-- <string name="pref_vibrate_duration_title">Vibration intensity</string> -->
   <!-- <string name="pref_pin_entry_enabled_title">Pin entry layout</string> -->
   <!-- <string name="pref_pin_entry_enabled_summary">When typing numbers, dates and phone numbers</string> -->
   <string name="pref_category_style">Stil</string>
@@ -60,6 +66,12 @@
   <string name="pref_theme_e_altblack">Negru Alternativ</string>
   <string name="pref_theme_e_white">Albă</string>
   <string name="pref_theme_e_epaper">ePaper</string>
+  <!-- <string name="pref_theme_e_desert">Desert</string> -->
+  <!-- <string name="pref_theme_e_jungle">Jungle</string> -->
+  <!-- <string name="pref_theme_e_monet">Monet (System)</string> -->
+  <!-- <string name="pref_theme_e_monetlight">Monet (Light)</string> -->
+  <!-- <string name="pref_theme_e_monetdark">Monet (Dark)</string> -->
+  <!-- <string name="pref_theme_e_rosepine">Rosé Pine</string> -->
   <string name="pref_swipe_dist_e_very_short">Foarte apropiată</string>
   <string name="pref_swipe_dist_e_short">Apropiată</string>
   <string name="pref_swipe_dist_e_default">Normală</string>
@@ -67,11 +79,14 @@
   <string name="pref_swipe_dist_e_very_far">Foarte depărtată</string>
   <string name="pref_key_horizontal_space">Distanța orizontală dintre taste</string>
   <string name="pref_key_vertical_space">Distanța verticală dintre taste</string>
-  <!-- <string name="pref_vibration_e_disabled">Disabled</string> -->
-  <!-- <string name="pref_vibration_e_system">System</string> -->
-  <!-- <string name="pref_vibration_e_strong">Strong</string> -->
-  <!-- <string name="pref_vibration_e_medium">Medium</string> -->
-  <!-- <string name="pref_vibration_e_light">Light</string> -->
+  <!-- <string name="pref_border_config_title">Customize borders</string> -->
+  <!-- <string name="pref_border_width_title">Border Width</string> -->
+  <!-- <string name="pref_corners_radius_title">Corner radius</string> -->
+  <!-- <string name="pref_circle_sensitivity_title">Circle gesture sensitivity</string> -->
+  <!-- <string name="pref_circle_sensitivity_e_high">High</string> -->
+  <!-- <string name="pref_circle_sensitivity_e_medium">Medium</string> -->
+  <!-- <string name="pref_circle_sensitivity_e_low">Low</string> -->
+  <!-- <string name="pref_circle_sensitivity_e_disabled">Disabled</string> -->
   <string name="key_action_next">Următor</string>
   <string name="key_action_done">Gata</string>
   <string name="key_action_go">Go</string>
@@ -79,11 +94,15 @@
   <string name="key_action_search">Caută</string>
   <string name="key_action_send">Trimite</string>
   <string name="launcher_button_imesettings">Activează tastatura</string>
+  <!-- <string name="launcher_button_imepicker">Select keyboard</string> -->
   <string name="launcher_description">Această aplicație este o tastatură virtuală. Accesați setările sistemului făcând clic pe butonul de mai jos și activați tastatura Unexpected.</string>
   <string name="launcher_sourcecode">Aceasta este o aplicație gratuită și open source. Puteți găsi codul sursă sau raporta erori folosind link-ul Github.</string>
   <string name="launcher_tryhere">După activare, puteți să încercați tastatura aici:</string>
+  <!-- <string name="launcher_tryhere_hint">Try here</string> -->
   <!-- <string name="key_descr_capslock">Caps lock</string> -->
+  <!-- <string name="key_descr_compose">Compose</string> -->
   <!-- <string name="key_descr_switch_greekmath">Greek &amp; math symbols</string> -->
+  <!-- <string name="key_descr_change_method">Switch keyboard</string> -->
   <!-- <string name="key_descr_voice_typing">Voice typing</string> -->
   <!-- <string name="key_descr_copy">Copy</string> -->
   <!-- <string name="key_descr_paste">Paste</string> -->
@@ -93,12 +112,18 @@
   <!-- <string name="key_descr_pasteAsPlainText">Paste as plain text</string> -->
   <!-- <string name="key_descr_undo">Undo</string> -->
   <!-- <string name="key_descr_redo">Redo</string> -->
-  <!-- <string name="key_descr_replaceText">Replace</string> -->
-  <!-- <string name="key_descr_textAssist">Assist</string> -->
-  <!-- <string name="key_descr_autofill">Autofill</string> -->
   <!-- <string name="key_descr_ª">Ordinal Indicator</string> -->
   <!-- <string name="key_descr_º">Ordinal Indicator</string> -->
   <!-- <string name="key_descr_superscript">Superscript</string> -->
   <!-- <string name="key_descr_subscript">Subscript</string> -->
-  <string name="pref_category_advanced">Setări avansate</string>
+  <!-- <string name="key_descr_page_up">Page Up</string> -->
+  <!-- <string name="key_descr_page_down">Page Down</string> -->
+  <!-- <string name="key_descr_home">Home</string> -->
+  <!-- <string name="key_descr_end">End</string> -->
+  <!-- <string name="key_descr_clipboard">Clipboard manager</string> -->
+  <!-- <string name="key_descr_combining">Combining diacritic</string> -->
+  <!-- <string name="clipboard_history_heading">Recently copied text</string> -->
+  <!-- <string name="clipboard_pin_heading">Pinned</string> -->
+  <!-- <string name="clipboard_remove_confirm">Remove this clipboard?</string> -->
+  <!-- <string name="clipboard_remove_confirmed">Yes</string> -->
 </resources>

@@ -4,52 +4,46 @@ Thanks for contributing :)
 
 ## Building the app
 
-The application doesn't use Gradle and it might be hard to use some features of
-Android Studio.
-
-Fortunately, there's not many dependencies:
-- OpenJDK 8
+The application uses Gradle and can be used with Android Studio, but using
+Android Studio is not required. The build dependencies are:
+- OpenJDK 17
 - Android SDK: build tools (minimum `28.0.1`), platform `30`
-- Make sure to have the `$ANDROID_HOME` environment variable set.
+
+Python 3 is required to update generated files but not to build the app.
+
+For Android Studio users, no more setup is needed.
 
 For Nix users, the right environment can be obtained with `nix-shell ./shell.nix`.
-Instructions to install Nix are [here](https://nixos.wiki/wiki/Nix_Installation_Guide).
+Instructions to install Nix are [here](https://wiki.nixos.org/wiki/Nix_Installation_Guide).
+
+If you don't use Android Studio or Nix, you have to inform Gradle about the
+location of your Android SDK by either:
+- Setting the `ANDROID_HOME` environment variable to point to the android sdk or
+- Creating the file `local.properties` and writing
+  `sdk.dir=<location_of_android_home>` into it.
 
 Building the debug apk:
 
 ```sh
-make
+./gradlew assembleDebug
 ```
 
-If the build succeed, the debug apk is located in `_build/juloo.keyboard2.debug.apk`.
+Nix users can call gradle directly: `gradle assembleDebug`.
 
-## Using the local debug.keystore on the Github CI actions
-
-It's possible to save the local debug.keystore into a github secret, so the same keystore is utilized to build the debug apk in the CI github actions.
-Doing this, they wil have the same signature, thus the debug apk can be updated without having to uninstall it first.
-
-After you sucessfully run `make`, (thus a debug.keystore exists) you can use this second command to generate a base64 stringified version of it
-
-```sh
-cd _build
-gpg -c --armor --pinentry-mode loopback --passphrase debug0 --yes "debug.keystore"
-```
-
-A file will be generated inside the local `_build/` folder, called `debug.keystore.asc`
-
-You can copy the content of this file, and with that, paste it into a new github secret in your repo settings.
-
-The secret must be named `DEBUG_KEYSTORE`
+If the build succeeds, the debug apk is located in `build/outputs/apk/debug/app-debug.apk`.
 
 ## Debugging on your phone
 
 First [Enable adb debugging on your device](https://developer.android.com/studio/command-line/adb#Enabling).
-Then connect your phone to your computer using an USB cable or wireless
+Then connect your phone to your computer using an USB cable or via wireless
 debugging.
+
+If you use Android Studio, this process will be automatic and you don't have to
+follow this guide anymore.
 
 And finally, install the application with:
 ```sh
-make installd
+./gradlew installDebug
 ```
 
 The released version of the application won't be removed, both versions will
@@ -57,11 +51,13 @@ be installed at the same time.
 
 ## Debugging the application: INSTALL_FAILED_UPDATE_INCOMPATIBLE
 
-`make installd` can fail with the following error message:
+`./gradlew installDebug` can fail with the following error message:
 
 ```
-adb: failed to install _build/juloo.keyboard2.debug.apk: Failure [INSTALL_FAILED_UPDATE_INCOMPATIBLE: Package juloo.keyboard2.debug signatures do not match previously installed version; ignoring!]
-make: *** [Makefile:20: installd] Error 1
+FAILURE: Build failed with an exception.
+* What went wrong:
+Execution failed for task ':installDebug'.
+> java.util.concurrent.ExecutionException: com.android.builder.testing.api.DeviceException: com.android.ddmlib.InstallException: INSTALL_FAILED_UPDATE_INCOMPATIBLE: Existing package juloo.keyboard2.debug signatures do not match newer version; ignoring!
 ```
 
 The application can't be "updated" because the temporary certificate has been
@@ -70,36 +66,57 @@ The application must be enabled again in the settings.
 
 ```sh
 adb uninstall juloo.keyboard2.debug
-make installd
+./gradlew installDebug
 ```
+
+## Specifying a debug signing certificate on Github Actions
+
+It's possible to specify the signing certificate that the automated build
+should use.
+After you successfully run `./gradlew asssembleDebug`, (thus a debug.keystore
+exists) you can use this second command to generate a base64 stringified
+version of it:
+
+```sh
+gpg -c --armor --pinentry-mode loopback --passphrase debug0 --yes "debug.keystore"
+```
+
+This will create the file `debug.keystore.asc`, paste its content into a new
+Github secret named `DEBUG_KEYSTORE`.
 
 ## Guidelines
 
 ### Adding a layout
 
-Layouts are defined in XML, see `res/xml/latn_qwerty_us.xml`.
+Layouts are defined in XML, see `srcs/layouts/latn_qwerty_us.xml`.
 An online tool for editing layout files written by @Lixquid is available
 [here](https://unexpected-keyboard-layout-editor.lixquid.com/).
 
 Makes sure to specify the `name` attribute like in `latn_qwerty_us.xml`,
 otherwise the layout won't be added to the app.
 
-The layout file must be placed in the `res/xml/` directory and named according to:
+The layout file must be placed in the `srcs/layouts` directory and named
+according to:
 - script (`latn` for latin, etc..)
 - layout name (eg. the name of a standard)
 - country code (or language code if more adequate)
 
-Then, run `make gen_layouts` to add the layout to the app.
+Then, run `./gradlew genLayoutsList` to add the layout to the app.
 
 The last step will update the file `res/values/layouts.xml`, that you should
 not edit directly.
 
-Run `make check_layouts` to check some properties about your layout. This will
-change the file `check_layout.output`, which you should commit.
+Run `./gradlew checkKeyboardLayouts` to check some properties about your
+layout. This will change the file `check_layout.output`, which you should
+commit.
+
+Layouts are CC0 licensed by default. If you do not want your layout to be
+released into the public domain, add a copyright notice at the top of the file
+and a mention in `srcs/layouts/LICENSE`.
 
 #### Adding a programming layout
 
-A programming layout must contains every ASCII characters.
+A programming layout must contain all ASCII characters.
 The current programming layouts are: QWERTY, Dvorak and Colemak.
 
 See for example, Dvorak, added in https://github.com/Julow/Unexpected-Keyboard/pull/16
@@ -163,17 +180,21 @@ the file and the English strings.
 To check that `strings.xml` is formatted correctly, run
 `python sync_translations.py`. This will modify your files.
 
-The store description is found in `metadata/android/<locale>/`,
-`short_description.txt` and `full_description.txt`.
-The short description must not exceed 80 characters.
+Store descriptions in `fastlane/metadata/android/` are updated automatically.
 Translating changelogs is not useful.
 
 The app name might be partially translated, the "Unexpected" word should remain
-untranslated.
+untranslated if possible.
 
 As translations need to be updated regularly, you can subscribe to this issue
 to receive a notification when an update is needed:
 https://github.com/Julow/Unexpected-Keyboard/issues/373
+
+### Adding Compose key sequences
+
+New Compose sequences can be added into `srcs/compose/compose/extra.json`.
+If a entirely new family of sequences were to be added, a new `.json` file can
+be created in the same directory to host them.
 
 ### Adding key combinations
 

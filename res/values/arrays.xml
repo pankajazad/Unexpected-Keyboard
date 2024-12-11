@@ -26,6 +26,12 @@
     <item>@string/pref_theme_e_altblack</item>
     <item>@string/pref_theme_e_white</item>
     <item>@string/pref_theme_e_epaper</item>
+    <item>@string/pref_theme_e_desert</item>
+    <item>@string/pref_theme_e_jungle</item>
+    <item>@string/pref_theme_e_monet</item>
+    <item>@string/pref_theme_e_monetlight</item>
+    <item>@string/pref_theme_e_monetdark</item>
+    <item>@string/pref_theme_e_rosepine</item>
   </string-array>
   <string-array name="pref_theme_values">
     <item>system</item>
@@ -35,6 +41,12 @@
     <item>altblack</item>
     <item>white</item>
     <item>epaper</item>
+    <item>desert</item>
+    <item>jungle</item>
+    <item>monet</item>
+    <item>monetlight</item>
+    <item>monetdark</item>
+    <item>rosepine</item>
   </string-array>
   <string-array name="pref_swipe_dist_entries">
     <item>@string/pref_swipe_dist_e_very_short</item>
@@ -50,18 +62,16 @@
     <item>25</item>
     <item>35</item>
   </string-array>
-  <string-array name="pref_vibration_entries">
-    <item>@string/pref_vibration_e_disabled</item>
-    <item>@string/pref_vibration_e_system</item>
-    <item>@string/pref_vibration_e_strong</item>
-    <item>@string/pref_vibration_e_medium</item>
-    <item>@string/pref_vibration_e_light</item>
+  <string-array name="pref_circle_sensitivity_entries">
+    <item>@string/pref_circle_sensitivity_e_high</item>
+    <item>@string/pref_circle_sensitivity_e_medium</item>
+    <item>@string/pref_circle_sensitivity_e_low</item>
+    <item>@string/pref_circle_sensitivity_e_disabled</item>
   </string-array>
-  <string-array name="pref_vibration_values">
-    <item>disabled</item>
-    <item>system</item>
-    <item>strong</item>
-    <item>medium</item>
-    <item>light</item>
+  <string-array name="pref_circle_sensitivity_values">
+    <item>2</item>
+    <item>3</item>
+    <item>4</item>
+    <item>12</item>
   </string-array>
 </resources>
