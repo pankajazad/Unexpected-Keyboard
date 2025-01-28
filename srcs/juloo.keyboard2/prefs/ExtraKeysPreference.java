@@ -51,6 +51,10 @@ public class ExtraKeysPreference extends PreferenceCategory
     "†",
     "ª",
     "º",
+    "zwj",
+    "zwnj",
+    "nbsp",
+    "nnbsp",
     "tab",
     "esc",
     "page_up",
@@ -164,6 +168,10 @@ public class ExtraKeysPreference extends PreferenceCategory
       case "ª": id = R.string.key_descr_ª; break;
       case "º": id = R.string.key_descr_º; break;
       case "switch_clipboard": id = R.string.key_descr_clipboard; break;
+      case "zwj": id = R.string.key_descr_zwj; break;
+      case "zwnj": id = R.string.key_descr_zwnj; break;
+      case "nbsp": id = R.string.key_descr_nbsp; break;
+      case "nnbsp": id = R.string.key_descr_nnbsp; break;
 
       case "combining_dot_above":
       case "combining_double_aigu":
@@ -228,6 +236,40 @@ public class ExtraKeysPreference extends PreferenceCategory
   {
     switch (key_name)
     {
+      case "cut":
+        return new KeyboardData.PreferredPos(KeyValue.getKeyByName("x"),
+            new KeyboardData.KeyPos[]{
+              new KeyboardData.KeyPos(2, 2, 8),
+              new KeyboardData.KeyPos(2, -1, 8),
+              new KeyboardData.KeyPos(-1, -1, 8),
+            });
+      case "copy":
+        return new KeyboardData.PreferredPos(KeyValue.getKeyByName("c"),
+            new KeyboardData.KeyPos[]{
+              new KeyboardData.KeyPos(2, 3, 8),
+              new KeyboardData.KeyPos(2, -1, 8),
+              new KeyboardData.KeyPos(-1, -1, 8),
+            });
+      case "paste":
+        return new KeyboardData.PreferredPos(KeyValue.getKeyByName("v"),
+            new KeyboardData.KeyPos[]{
+              new KeyboardData.KeyPos(2, 4, 8),
+              new KeyboardData.KeyPos(2, -1, 8),
+              new KeyboardData.KeyPos(-1, -1, 8),
+            });
+      case "undo":
+        return new KeyboardData.PreferredPos(KeyValue.getKeyByName("z"),
+            new KeyboardData.KeyPos[]{
+              new KeyboardData.KeyPos(2, 1, 8),
+              new KeyboardData.KeyPos(2, -1, 8),
+              new KeyboardData.KeyPos(-1, -1, 8),
+            });
+      case "redo":
+        return new KeyboardData.PreferredPos(KeyValue.getKeyByName("y"),
+            new KeyboardData.KeyPos[]{
+              new KeyboardData.KeyPos(0, -1, 8),
+              new KeyboardData.KeyPos(-1, -1, 8),
+            });
       case "f11_placeholder":
         return new KeyboardData.PreferredPos(KeyValue.getKeyByName("9"),
             new KeyboardData.KeyPos[]{

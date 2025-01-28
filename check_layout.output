@@ -29,6 +29,8 @@ Layout includes some ASCII punctuation but not all, missing: $
 # beng_provat
 Layout includes some ASCII punctuation but not all, missing: $, &, *, ., /, <, >, [, \, ], `, {, |, }
 1 warnings
+# cyrl_fcuzhen_mn
+0 warnings
 # cyrl_jcuken_kk
 0 warnings
 # cyrl_jcuken_ru
@@ -59,6 +61,9 @@ Layout doesn't define some important keys, missing: loc esc, loc tab
 Duplicate keys: ।
 Layout includes some ASCII punctuation but not all, missing: ", $, ', ^, _, `, |
 2 warnings
+# deva_phonetic_in
+Duplicate keys: ट
+1 warnings
 # georgian_mes
 0 warnings
 # georgian_qwerty
@@ -100,13 +105,19 @@ Some keys contain whitespaces, unexpected:  ́
 # latn_neo2
 Layout redefines the bottom row but some important keys are missing, missing: loc switch_clipboard
 1 warnings
+# latn_qwerty_az
+0 warnings
 # latn_qwerty_br
+0 warnings
+# latn_qwerty_cy
 0 warnings
 # latn_qwerty_cz
 0 warnings
 # latn_qwerty_da
 0 warnings
 # latn_qwerty_es
+0 warnings
+# latn_qwerty_et
 0 warnings
 # latn_qwerty_ga
 0 warnings
@@ -120,7 +131,11 @@ Layout redefines the bottom row but some important keys are missing, missing: lo
 0 warnings
 # latn_qwerty_kk
 0 warnings
+# latn_qwerty_lt
+0 warnings
 # latn_qwerty_lv
+0 warnings
+# latn_qwerty_mt
 0 warnings
 # latn_qwerty_no
 0 warnings
@@ -142,6 +157,8 @@ Layout doesn't define some important keys, missing: loc esc, loc tab
 # latn_qwerty_tr
 0 warnings
 # latn_qwerty_us
+0 warnings
+# latn_qwerty_uz
 0 warnings
 # latn_qwerty_vi
 0 warnings
@@ -165,7 +182,11 @@ Layout includes some ASCII punctuation but not all, missing: `
 1 warnings
 # latn_qwertz_sq
 0 warnings
+# latn_workman_us
+0 warnings
 # shaw_imperial_en
+0 warnings
+# tamil_default
 0 warnings
 # urdu_phonetic_ur
 Duplicate keys:  
